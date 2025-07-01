@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Video Articles</title>
+  <style>
+    table {border-collapse: collapse; width: 100%;}
+    th, td {border: 1px solid #ccc; padding: 4px;}
+  </style>
+</head>
+<body>
+  <h1>Processed Videos</h1>
+  <table>
+    <tr><th>ID</th><th>Title</th><th>Total Score</th><th>Actions</th></tr>
+    {% for v in videos %}
+    <tr>
+      <td>{{ v.id }}</td>
+      <td>{{ v.title or v.url }}</td>
+      <td>{{ v.score["综合质量分"] }}</td>
+      <td><a href="/article/{{ v.id }}">View</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+</body>
+</html>
