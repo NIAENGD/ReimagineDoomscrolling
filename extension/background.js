@@ -57,13 +57,18 @@ async function startProcessing() {
   let done = 0;
   for (const url of links) {
     if (!running) break;
-    const title = await fetchTitle(url);
-    log('processing video: ' + title);
-    const transcript = await fetchTranscript(url);
-    const result = await processTranscript(transcript, title);
-    const article = {id: articles.length + 1, url, title, ...result};
-    await persistArticle(article);
-    articles.push(article);
+    try {
+      const title = await fetchTitle(url);
+      log('processing video: ' + title);
+      const transcript = await fetchTranscript(url);
+      const result = await processTranscript(transcript, title);
+      const article = {id: articles.length + 1, url, title, ...result};
+      await persistArticle(article);
+      articles.push(article);
+    } catch (e) {
+      console.error('Error processing video', url, e);
+      log('error: ' + e.message);
+    }
     done++;
     chrome.runtime.sendMessage({progress: Math.round(done/links.length*100), status: `processed ${done}/${links.length}`});
   }
@@ -77,6 +82,33 @@ async function startProcessing() {
 function openTab(url) {
   return new Promise(resolve => {
     chrome.tabs.create({url, active: false}, tab => resolve(tab.id));
+  });
+}
+
+// open a minimised popup window for a URL, returning both window and tab ids
+function openPopup(url) {
+  return new Promise(resolve => {
+    chrome.windows.create({
+      url,
+      type: 'popup',
+      focused: false,
+      state: 'minimized'
+    }, win => {
+      resolve({ windowId: win.id, tabId: win.tabs[0].id });
+    });
+  });
+}
+
+// wait until the tab finishes loading
+function waitTabComplete(tabId) {
+  return new Promise(resolve => {
+    const listener = (id, info) => {
+      if (id === tabId && info.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
   });
 }
 
@@ -137,13 +169,17 @@ async function fetchTranscript(url) {
 }
 
 async function fetchTitle(url) {
-  const id = await openTab(url);
-  const res = await chrome.scripting.executeScript({
-    target: { tabId: id },
-    func: () => document.title
-  });
-  chrome.tabs.remove(id);
-  return res[0]?.result || url;
+  const { windowId, tabId } = await openPopup(url);
+  await waitTabComplete(tabId);
+  try {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => document.title || ''
+    });
+    return result || url;
+  } finally {
+    chrome.windows.remove(windowId);
+  }
 }
 
 async function processTranscript(transcript, title) {
