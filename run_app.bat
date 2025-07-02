@@ -37,7 +37,11 @@ if "%choice%"=="5" (
     goto menu
 )
 if "%choice%"=="6" (
-    git -C "%~dp0." pull
+    if exist "%~dp0\.git" (
+        git -C "%~dp0." pull
+    ) else (
+        echo Git repository not found. Please clone using git to enable updates.
+    )
     pause
     goto menu
 )
