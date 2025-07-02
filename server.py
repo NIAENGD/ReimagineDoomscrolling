@@ -56,7 +56,6 @@ def whisper_transcribe(audio_path: Path) -> str:
         return txt_file.read_text("utf-8")
     return ""
 
-
 @app.route("/api/subtitles", methods=["POST"])
 def api_subtitles() -> jsonify:
     """Return a transcript for the requested YouTube URL."""
@@ -91,6 +90,7 @@ def api_subtitles() -> jsonify:
 @app.route("/")
 def root():
     return "YT helper server running"
+
 
 
 if __name__ == "__main__":
