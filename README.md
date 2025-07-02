@@ -8,10 +8,12 @@ See [docs/overview.md](docs/overview.md) for the current high level design, incl
 
 ## Quick start
 
-Install dependencies and run the helper server. It only provides a local endpoint for Whisper transcription so no API keys are required:
+Install dependencies and run the helper server. It only provides a local endpoint for Whisper transcription so no API keys are required. The server expects the `yt-dlp` and `whisper` commands (from `openai-whisper`) plus `ffmpeg` to be on your `PATH`:
 
 ```bash
 pip install -r requirements.txt
+# also ensure the helper CLIs are installed
+pip install yt-dlp openai-whisper
 python server.py
 ```
 
@@ -29,3 +31,13 @@ desired ChatGPT model manually within the ChatGPT tab—the extension simply sen
 your prompts to whatever model is active.
 Before starting, ensure you are logged into both sites. The popup checks for cookies and refuses to run if either account is missing.
 Once processing completes the extension automatically closes the hidden YouTube and ChatGPT tabs.
+
+## Development status
+
+This project remains experimental and many features are incomplete. Planned work includes:
+
+- A richer reader interface for processed articles
+- Persisting results across sessions
+- More configuration around Whisper models and languages
+
+See [TODO.md](TODO.md) for additional notes.
