@@ -115,7 +115,7 @@ function waitTabComplete(tabId) {
 async function openTabs() {
   cleanupTabs();
   ytTabId = await openTab('https://www.youtube.com');
-  gptTabId = await openTab('https://chat.openai.com');
+  gptTabId = await openTab('https://chatgpt.com');
 }
 
 async function collectLinks(tabId, count) {
