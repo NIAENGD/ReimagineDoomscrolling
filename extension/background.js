@@ -93,7 +93,7 @@ function openPopup(url) {
     chrome.windows.create({
       url,
       type: 'popup',
-      focused: true,
+      focused: false,
       state: 'minimized'
     }, win => {
       resolve({ windowId: win.id, tabId: win.tabs[0].id });
