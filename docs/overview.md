@@ -17,31 +17,60 @@ The new application consists of a local helper server and a browser extension.
 
 ### Local Helper Server
 - Runs Whisper for speech-to-text when subtitle tracks are unavailable.
-- Hosts a small web interface to view analysed videos and their rewritten articles.
-- Communicates with the extension to receive audio snippets and return transcripts.
+- Provides a simple HTTP API so the extension can request transcripts.
 
 ### Processing Steps
-1. Extension gathers video links and downloads official subtitles using `yt-dlp`. If no subtitles exist, it retrieves audio and requests transcription from the local server.
-2. Each transcript is sent to ChatGPT twice: first to score the video using several criteria, then to rewrite it as a full article in the style of the original creator.
-3. Results are stored locally and served on a web page sorted by total score. Users can read each article, like or dislike it and optionally trigger an automated watch-through/feedback action in the hidden YouTube tab.
+1. The extension gathers video links and attempts to download official subtitles. If none are available it requests audio transcription from the local server.
+2. Each transcript is processed inside the extension using a hidden ChatGPT tab—first for scoring, then for rewriting as an article.
+3. Results are stored in extension storage and presented on an internal page sorted by total score. Users can like or dislike a video which triggers optional watch-through actions in the hidden YouTube tab.
 
 ## Default Prompts
 ### Scoring
 ```
-预处理-忽略所有广告部分，并不以此为依据处理视频
+You are an impartial video-analysis engine.
 
-视频类别：【写出类别】
-类别评分：【从列表中选择，每个用一句话简要解释原因】
+INPUT
+———
+{{transcript}}   ← full, raw video transcript (in any language)
 
-逻辑：混乱，误导性，清晰
-深度：阐述，起因，深层，底层
-见解：粗浅，深层，底层
-表达：呆板、自然、生动
-启发性：中性、有启发、强激励
+TASK
+———
+1. **Pre-processing**
+   • Remove or ignore all segments that are clearly promotional, sponsored, or ad-read in nature.
+   • Evaluate only the substantive, non-advertisement content.
 
-综合质量分：【0-100，极为严格的分数，平庸视频不会超过30，极佳的视频可能到60，没有视频能达到100】
+2. **Scoring (0-100, decimals allowed)**
+   Apply the *strict* rubric below to each dimension.
+   • A typical, average-quality video transcript scores **< 30**.
+   • Only truly exceptional work reaches **> 60**.
+   • Nobody scores 100.
+   • Score each dimension independently; do **not** calculate or output any totals.
 
-盲点与挑战：提炼内容，指出潜在误导、局限、偏颇或易被误解之处，含信息来源、现实可行性、商业倾向、风险遗漏等方面，一句话说完，简洁理性，勿泛泛而谈。
+   | Dimension (JSON key) | 0 – 19 (Poor) | 20 – 39 (Weak) | 40 – 59 (Fair) | 60 – 79 (Strong) | 80 – 100 (Exceptional) |
+   |----------------------|---------------|----------------|----------------|------------------|------------------------|
+   | **logic**            | Incoherent, contradictory, or overtly misleading | Frequent gaps or fallacies | Generally coherent but with some leaps or ambiguities | Clear, sequential, few minor issues | Crystal-clear, airtight, zero misleading cues |
+   | **depth**            | Surface-level, anecdotal | Minimal background/context | Moderately deep; some causal links | Thorough causal & systemic analysis | Multi-layer, root-cause & systemic depth |
+   | **insight**          | Trivial or common knowledge | Few minor takeaways | Some new angles, limited originality | Several fresh, actionable insights | Breakthrough, paradigm-shifting insights |
+   | **expression**       | Robotic or disjointed | Stiff, monotonous | Mostly natural; occasional dull moments | Engaging, vivid narration | Highly vivid, memorable storytelling |
+   | **inspiration**      | None; flat | Slightly motivating | Moderately inspiring | Strongly motivating | Profoundly energising & empowering |
+   | **overallQuality**   | Holistically synthesize the above (but do **not** average them mechanically); apply the same 0-100 scale |
+
+3. **Blind-Spots & Challenges**
+   Craft **one concise sentence** (≤ 35 words) flagging any major bias, commercial tilt, feasibility gaps, risk omissions, or likely misinterpretations the audience might overlook. Be specific, rational, and avoid clichés.
+
+OUTPUT
+———
+Return **only** the following JSON (no commentary):
+
+{
+  "logic": <float>,
+  "depth": <float>,
+  "insight": <float>,
+  "expression": <float>,
+  "inspiration": <float>,
+  "overallQuality": <float>,
+  "blindSpots": "<single sentence here>"
+}
 ```
 
 ### Rewriting Transcript as Article

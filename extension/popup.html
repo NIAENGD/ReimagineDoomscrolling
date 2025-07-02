@@ -9,9 +9,19 @@
 </head>
 <body>
   <h4>Reimagine Doomscrolling</h4>
+  <div>
+    <label>Count <input type="number" id="count" value="6" min="1" max="20" style="width:60px"></label>
+  </div>
+  <div>
+    <label>Model <input id="model" value="gpt-3.5-turbo" style="width:130px"></label>
+  </div>
   <button id="start">Start</button>
   <button id="stop">Stop</button>
+  <button id="open">Open results</button>
+  <div style="margin-top:4px"><progress id="progress" value="0" max="100" style="width:100%"></progress></div>
   <div id="status"></div>
+  <div id="ytStatus"></div>
+  <div id="gptStatus"></div>
   <script src="popup.js"></script>
 </body>
 </html>

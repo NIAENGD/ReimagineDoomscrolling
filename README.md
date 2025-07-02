@@ -4,7 +4,7 @@ A concept for curating high-quality YouTube content.
 
 This repository contains notes and design documents for a proposed browser extension and local helper server. The goal is to automatically fetch videos from a user's feed, analyse transcripts with language models and present rewritten articles for distraction-free reading.
 
-See [docs/overview.md](docs/overview.md) for the current high level design.
+See [docs/overview.md](docs/overview.md) for the current high level design, including the strict scoring rubric used when analysing each transcript.
 
 ## Quick start
 
@@ -15,8 +15,12 @@ pip install -r requirements.txt
 python server.py
 ```
 
-The server exposes a small API for transcription and processing. See
-`server.py` for details. A very simple Chrome extension is provided in the
-`extension/` folder. Load this folder as an unpacked extension and use the popup
-to start collecting links from your YouTube feed. Each link will be sent to the
-local server for analysis.
+Windows users can double-click `run_server.cmd` which simply runs the command
+above.
+
+The server exposes a small API for fetching subtitles and running Whisper when
+needed. The Chrome extension in the `extension/` folder handles scoring and the
+results page internally. Load the folder as an unpacked extension and use the
+popup to start collecting links. Each link is sent to the server only when a
+transcript is required.
+=======
