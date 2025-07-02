@@ -27,6 +27,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.cmd === 'start') {
     options = Object.assign(options, msg.opts || {});
     startProcessing();
+  } else if (msg.cmd === 'openTabs') {
+    openTabs();
   } else if (msg.cmd === 'stop') {
     running = false;
     cleanupTabs();
@@ -40,9 +42,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 async function startProcessing() {
   if (running) return;
   running = true;
-  cleanupTabs();
-  ytTabId = await openTab('https://www.youtube.com');
-  gptTabId = await openTab('https://chat.openai.com');
+  if (!ytTabId || !gptTabId) {
+    await openTabs();
+  }
   chrome.runtime.sendMessage({status: 'gathering links...', progress: 0});
   const links = await collectLinks(ytTabId, options.count);
   chrome.runtime.sendMessage({status: 'processing ' + links.length + ' videos', progress: 0});
@@ -68,6 +70,12 @@ function openTab(url) {
   return new Promise(resolve => {
     chrome.tabs.create({url, active: false}, tab => resolve(tab.id));
   });
+}
+
+async function openTabs() {
+  cleanupTabs();
+  ytTabId = await openTab('https://www.youtube.com');
+  gptTabId = await openTab('https://chat.openai.com');
 }
 
 async function collectLinks(tabId, count) {

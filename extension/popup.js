@@ -64,11 +64,11 @@ async function checkLogin() {
   return yt.length > 0 && gpt.length > 0;
 }
 
+document.getElementById('openTabs').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ cmd: 'openTabs' });
+});
+
 document.getElementById('start').addEventListener('click', async () => {
-  if (!(await checkLogin())) {
-    statusEl.textContent = 'Please log into YouTube and ChatGPT first';
-    return;
-  }
   const opts = {
     count: Number(countEl.value),
     scorePrompt: scoreEl.value || DEFAULT_SCORE_PROMPT,
