@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory, render_template, redirect, url_for
 import subprocess
 import tempfile
 import openai
@@ -62,6 +62,23 @@ REWRITE_PROMPT = (
     "切记！这并不是一个TLDR，或是总结，而是完整的文稿。"\
     "切记！这不是一个总结，你需要输出尽量还原原视频的长度。"
 )
+
+# ---------------------------------------------------------------------------
+# util helpers
+
+def get_video_title(url: str) -> str:
+    """Return the YouTube video title using yt-dlp."""
+    try:
+        res = subprocess.run(
+            ["yt-dlp", "--skip-download", "--get-title", url],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        title = res.stdout.strip()
+        return title or url
+    except Exception:
+        return url
 
 # --- helpers --------------------------------------------------------------
 
@@ -137,7 +154,8 @@ def process_url(url: str) -> dict:
     article = rewrite_article(transcript)
     idx = load_index()
     vid = len(idx) + 1
-    idx.append({"id": vid, "url": url, "title": "", "score": score})
+    title = get_video_title(url)
+    idx.append({"id": vid, "url": url, "title": title, "score": score})
     save_index(idx)
     (ARTICLES_DIR / f"{vid}.json").write_text(
         json.dumps({"article": article, "transcript": transcript}, ensure_ascii=False, indent=2),
@@ -214,6 +232,7 @@ def api_fetch():
 @app.route("/")
 def index():
     idx = load_index()
+    idx.sort(key=lambda x: x.get("score", {}).get("overallQuality", 0), reverse=True)
     return render_template("index.html", videos=idx)
 
 
@@ -230,7 +249,35 @@ def article_page(aid: int):
         title=v.get("title", v.get("url")),
         score=v.get("score", {}),
         article=data["article"],
+        vid=v["id"],
+        liked=v.get("liked"),
+        disliked=v.get("disliked"),
+        url=v.get("url"),
     )
+
+
+@app.route("/like/<int:vid>", methods=["POST"])
+def like_video(vid: int):
+    idx = load_index()
+    v = next((i for i in idx if i["id"] == vid), None)
+    if not v:
+        return "Not found", 404
+    v["liked"] = True
+    v["disliked"] = False
+    save_index(idx)
+    return redirect(url_for("article_page", aid=vid))
+
+
+@app.route("/dislike/<int:vid>", methods=["POST"])
+def dislike_video(vid: int):
+    idx = load_index()
+    v = next((i for i in idx if i["id"] == vid), None)
+    if not v:
+        return "Not found", 404
+    v["disliked"] = True
+    v["liked"] = False
+    save_index(idx)
+    return redirect(url_for("article_page", aid=vid))
 
 
 

@@ -2,6 +2,8 @@ const countEl = document.getElementById('count');
 const modelEl = document.getElementById('model');
 const progressEl = document.getElementById('progress');
 const statusEl = document.getElementById('status');
+const ytStatusEl = document.getElementById('ytStatus');
+const gptStatusEl = document.getElementById('gptStatus');
 
 document.getElementById('open').addEventListener('click', () => {
   chrome.tabs.create({ url: 'http://localhost:5001' });
@@ -23,6 +25,15 @@ chrome.runtime.onMessage.addListener((msg) => {
     progressEl.value = msg.progress;
   }
 });
+
+async function updateLogin() {
+  const yt = await chrome.cookies.getAll({url: 'https://www.youtube.com'});
+  ytStatusEl.textContent = 'YouTube: ' + (yt.length ? 'logged in' : 'NOT logged in');
+  const gpt = await chrome.cookies.getAll({url: 'https://chat.openai.com'});
+  gptStatusEl.textContent = 'ChatGPT: ' + (gpt.length ? 'logged in' : 'NOT logged in');
+}
+
+updateLogin();
 
 // Load saved options
 chrome.storage.local.get('opts', (data) => {

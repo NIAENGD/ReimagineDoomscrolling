@@ -9,6 +9,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     startProcessing();
   } else if (msg.cmd === 'stop') {
     running = false;
+  } else if (msg.cmd === 'watchLike') {
+    watchAndReact(msg.url, true);
+  } else if (msg.cmd === 'watchDislike') {
+    watchAndReact(msg.url, false);
   }
 });
 
@@ -60,4 +64,28 @@ async function collectLinks(tabId, count) {
     if (links.length < count) await new Promise(r => setTimeout(r, 1000));
   }
   return links.slice(0, count);
+}
+
+async function watchAndReact(url, like) {
+  const id = await openTab(url);
+  await chrome.scripting.executeScript({
+    target: {tabId: id},
+    func: (like) => {
+      const vid = document.querySelector('video');
+      if (vid) { vid.muted = true; vid.play(); }
+      setTimeout(() => {
+        if (like) {
+          document.querySelector('ytd-toggle-button-renderer button')?.click();
+        } else {
+          document.querySelector('ytd-menu-renderer button')?.click();
+          setTimeout(() => {
+            const item = Array.from(document.querySelectorAll('ytd-menu-service-item-renderer')).find(el => el.textContent.toLowerCase().includes('not interested'));
+            item?.click();
+          }, 500);
+        }
+      }, 3000);
+    },
+    args: [like]
+  });
+  setTimeout(() => chrome.tabs.remove(id), 15000);
 }

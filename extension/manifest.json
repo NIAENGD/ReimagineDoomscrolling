@@ -3,12 +3,22 @@
   "name": "ReimagineDoomscrolling",
   "version": "0.1",
   "description": "Collect and analyse YouTube feed videos",
-  "permissions": ["tabs", "storage", "scripting"],
+  "permissions": ["tabs", "storage", "scripting", "cookies"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
     "default_popup": "popup.html"
   },
-  "host_permissions": ["http://localhost:5001/*"]
+  "host_permissions": [
+    "http://localhost:5001/*",
+    "https://www.youtube.com/*",
+    "https://chat.openai.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:5001/*"],
+      "js": ["inject.js"]
+    }
+  ]
 }

@@ -9,11 +9,18 @@
   <div>
     <h2>Scores</h2>
     <table>
-      {% for k, v in score.items() %}
-      <tr><th>{{ k }}</th><td>{{ v }}</td></tr>
+      {% for k in ['logic','depth','insight','expression','inspiration','overallQuality'] %}
+      <tr><th>{{ k }}</th><td>{{ score[k] }}</td></tr>
       {% endfor %}
+      <tr><th>Blind Spots</th><td>{{ score['blindSpots'] }}</td></tr>
     </table>
   </div>
+  <form method="post" action="/like/{{ vid }}" style="display:inline">
+    <button data-watch-like data-url="{{ url }}"{% if liked %} disabled{% endif %}>Like &amp; watch</button>
+  </form>
+  <form method="post" action="/dislike/{{ vid }}" style="display:inline">
+    <button data-watch-dislike data-url="{{ url }}"{% if disliked %} disabled{% endif %}>Dislike</button>
+  </form>
   <pre>{{ article }}</pre>
   <p><a href="/">Back</a></p>
 </body>
