@@ -12,7 +12,7 @@ The new application consists of a local helper server and a browser extension.
 
 ### Browser Extension
 - Provides a control panel where the user can start or stop analysis, choose the number of videos to process and configure prompts.
-- Opens two hidden tabs: one for YouTube and one for ChatGPT. Both tabs share the user's logged-in cookies.
+- Opens two focused popup windows: one for YouTube and one for ChatGPT. Both windows share the user's logged-in cookies.
 - Collects video links from the YouTube feed by scrolling until the desired number of items is gathered, excluding Shorts, ads and other irrelevant entries.
 
 ### Local Helper Server
@@ -21,8 +21,8 @@ The new application consists of a local helper server and a browser extension.
 
 ### Processing Steps
 1. The extension gathers video links and attempts to download official subtitles. If none are available it requests audio transcription from the local server.
-2. Each transcript is processed inside the extension using a hidden ChatGPT tab—first for scoring, then for rewriting as an article.
-3. Results are stored in extension storage and presented on an internal page sorted by total score. Users can like or dislike a video which triggers optional watch-through actions in the hidden YouTube tab.
+2. Each transcript is processed inside the extension using the focused ChatGPT popup—first for scoring, then for rewriting as an article.
+3. Results are stored in extension storage and presented on an internal page sorted by total score. Users can like or dislike a video which triggers optional watch-through actions in the focused YouTube popup.
 
 ## Default Prompts
 ### Scoring
