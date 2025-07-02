@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "ReimagineDoomscrolling",
+  "version": "0.1",
+  "description": "Collect and analyse YouTube feed videos",
+  "permissions": ["tabs", "storage", "scripting"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "host_permissions": ["http://localhost:5001/*"]
+}
