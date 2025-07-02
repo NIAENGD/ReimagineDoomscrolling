@@ -3,8 +3,16 @@ const scoreEl = document.getElementById('scorePrompt');
 const rewriteEl = document.getElementById('rewritePrompt');
 const progressEl = document.getElementById('progress');
 const statusEl = document.getElementById('status');
+const logEl = document.getElementById('log');
 const ytStatusEl = document.getElementById('ytStatus');
 const gptStatusEl = document.getElementById('gptStatus');
+
+function addLog(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
 
 document.getElementById('open').addEventListener('click', () => {
   chrome.tabs.create({ url: chrome.runtime.getURL('results.html') });
@@ -59,8 +67,8 @@ const DEFAULT_REWRITE_PROMPT = `以原作者视角，忠实呈现视频中的观
 async function checkLogin() {
   const yt = await chrome.cookies.getAll({ url: 'https://www.youtube.com' });
   const gpt = await chrome.cookies.getAll({ url: 'https://chat.openai.com' });
-  ytStatusEl.textContent = 'YouTube: ' + (yt.length ? 'logged in' : 'NOT logged in');
-  gptStatusEl.textContent = 'ChatGPT: ' + (gpt.length ? 'logged in' : 'NOT logged in');
+  ytStatusEl.textContent = yt.length ? 'YouTube: logged in' : '';
+  gptStatusEl.textContent = gpt.length ? 'ChatGPT: logged in' : '';
   return yt.length > 0 && gpt.length > 0;
 }
 
@@ -83,7 +91,8 @@ document.getElementById('stop').addEventListener('click', () => {
 });
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.status) statusEl.textContent = msg.status;
+  if (msg.log) addLog(msg.log);
+  if (msg.status) addLog(msg.status);
   if (msg.progress != null) {
     progressEl.value = msg.progress;
   }
