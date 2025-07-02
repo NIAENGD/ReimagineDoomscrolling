@@ -1,15 +1,22 @@
+"""Minimal helper server for transcription tasks."""
+
 import json
-from pathlib import Path
-from flask import Flask, request, jsonify
 import subprocess
 import tempfile
+from pathlib import Path
+
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
+# Directory for temporary downloads
+TMP_BASE = Path(tempfile.gettempdir()) / "yt_tmp"
+TMP_BASE.mkdir(parents=True, exist_ok=True)
+
 
 def fetch_subtitles(url: str) -> str:
-    """Download subtitles with yt-dlp if available."""
-    with tempfile.TemporaryDirectory() as td:
+    """Return subtitles text for the given YouTube URL if available."""
+    with tempfile.TemporaryDirectory(dir=TMP_BASE) as td:
         out = Path(td) / "%(id)s"
         cmd = [
             "yt-dlp",
@@ -29,7 +36,7 @@ def fetch_subtitles(url: str) -> str:
 
 
 def whisper_transcribe(audio_path: Path) -> str:
-    """Transcribe audio using local whisper."""
+    """Transcribe audio using the local Whisper CLI."""
     out_dir = audio_path.parent
     cmd = [
         "whisper",
@@ -50,27 +57,41 @@ def whisper_transcribe(audio_path: Path) -> str:
     return ""
 
 
-@app.route('/api/subtitles', methods=['POST'])
-def api_subtitles():
-    data = request.get_json(force=True)
-    url = data.get('url')
+@app.route("/api/subtitles", methods=["POST"])
+def api_subtitles() -> jsonify:
+    """Return a transcript for the requested YouTube URL."""
+    data = request.get_json(force=True) or {}
+    url = data.get("url")
     if not url:
-        return jsonify({'error': 'missing url'}), 400
-    txt = fetch_subtitles(url)
-    if not txt:
-        with tempfile.TemporaryDirectory() as td:
-            audio = Path(td) / 'audio'
-            subprocess.run([
-                'yt-dlp',
-                '-f', 'bestaudio',
-                '-o', str(audio),
-                url,
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            audio_file = audio.with_suffix('.webm')
+        return jsonify({"error": "missing url"}), 400
+
+    transcript = fetch_subtitles(url)
+    if not transcript:
+        with tempfile.TemporaryDirectory(dir=TMP_BASE) as td:
+            audio = Path(td) / "audio"
+            subprocess.run(
+                [
+                    "yt-dlp",
+                    "-f",
+                    "bestaudio",
+                    "-o",
+                    str(audio),
+                    url,
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            audio_file = audio.with_suffix(".webm")
             if audio_file.exists():
-                txt = whisper_transcribe(audio_file)
-    return jsonify({'transcript': txt})
+                transcript = whisper_transcribe(audio_file)
+
+    return jsonify({"transcript": transcript})
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)
+@app.route("/")
+def root():
+    return "YT helper server running"
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5001)

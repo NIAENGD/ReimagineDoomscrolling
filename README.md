@@ -15,6 +15,9 @@ pip install -r requirements.txt
 python server.py
 ```
 
+Windows users can double-click `run_server.cmd` which simply runs the command
+above.
+
 The server exposes a small API for fetching subtitles and running Whisper when
 needed. The Chrome extension in the `extension/` folder handles scoring and the
 results page internally. Load the folder as an unpacked extension and use the
