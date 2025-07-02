@@ -3,7 +3,7 @@
   "name": "ReimagineDoomscrolling",
   "version": "0.1",
   "description": "Collect and analyse YouTube feed videos",
-  "permissions": ["tabs", "storage", "scripting", "cookies"],
+  "permissions": ["tabs", "windows", "storage", "scripting", "cookies"],
   "background": {
     "service_worker": "background.js"
   },
