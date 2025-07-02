@@ -38,8 +38,10 @@ transcript is required.
 The popup now lets you customise the scoring and rewriting prompts. Choose the
 desired ChatGPT model manually within the ChatGPT tab—the extension simply sends
 your prompts to whatever model is active.
-Before starting, ensure you are logged into both sites. The popup checks for cookies and refuses to run if either account is missing.
-Once processing completes the extension automatically closes the hidden YouTube and ChatGPT tabs.
+Use the new **Open tabs** button to launch hidden YouTube and ChatGPT tabs. Once
+they load, click **Start** to begin processing. The extension no longer blocks
+you if login cookies are missing. When finished it automatically closes the
+hidden tabs.
 
 ## Development status
 
