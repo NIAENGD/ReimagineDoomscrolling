@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const table = document.getElementById('table');
-  const data = await chrome.storage.local.get('articles');
+  const resp = await fetch('http://localhost:5001/api/articles');
+  const data = await resp.json();
   const articles = data.articles || [];
   articles.sort((a,b) => (b.score?.overallQuality || 0) - (a.score?.overallQuality || 0));
   for (const v of articles) {
