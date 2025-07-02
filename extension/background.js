@@ -1,9 +1,13 @@
 let running = false;
 let ytTabId = null;
 let gptTabId = null;
-let options = { count: 6 };
+let options = { count: 6, scorePrompt: '', rewritePrompt: '' };
 let articles = [];
 chrome.storage.local.get('articles', data => { articles = data.articles || []; });
+
+chrome.action.onClicked.addListener(() => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') });
+});
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.cmd === 'start') {
@@ -11,6 +15,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     startProcessing();
   } else if (msg.cmd === 'stop') {
     running = false;
+    cleanupTabs();
   } else if (msg.cmd === 'watchLike') {
     watchAndReact(msg.url, true);
   } else if (msg.cmd === 'watchDislike') {
@@ -21,6 +26,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 async function startProcessing() {
   if (running) return;
   running = true;
+  cleanupTabs();
   ytTabId = await openTab('https://www.youtube.com');
   gptTabId = await openTab('https://chat.openai.com');
   chrome.runtime.sendMessage({status: 'gathering links...', progress: 0});
@@ -39,6 +45,7 @@ async function startProcessing() {
   chrome.storage.local.set({articles});
   chrome.runtime.sendMessage({status: 'done', progress: 100});
   running = false;
+  cleanupTabs();
 }
 
 function openTab(url) {
@@ -53,11 +60,25 @@ async function collectLinks(tabId, count) {
     const res = await chrome.scripting.executeScript({
       target: {tabId},
       func: already => {
+        function getFrontPageVideos() {
+          const urls = [];
+          const grid = document.querySelector('ytd-rich-grid-renderer');
+          if (!grid) return urls;
+          grid.querySelectorAll('ytd-rich-item-renderer, ytd-reel-video-renderer, ytd-display-ad-renderer')
+            .forEach(tile => {
+              if (tile.tagName.includes('DISPLAY-AD') ||
+                  tile.tagName.includes('PROMOTED') ||
+                  tile.querySelector('[badge-style-type="ad"], span')?.textContent === 'Ad') return;
+              const link = tile.querySelector('a#thumbnail[href]');
+              if (!link) return;
+              if (link.getAttribute('href').startsWith('/shorts/')) return;
+              const url = new URL(link.getAttribute('href'), 'https://www.youtube.com').href;
+              if (!already.includes(url)) urls.push(url);
+            });
+          return urls;
+        }
         window.scrollBy(0, window.innerHeight);
-        const anchors = Array.from(document.querySelectorAll('a#thumbnail'));
-        const hrefs = anchors.map(a => a.href)
-          .filter(u => u.includes('watch') && !u.includes('shorts'));
-        return hrefs.filter(u => !already.includes(u));
+        return getFrontPageVideos();
       },
       args: [links],
     });
@@ -89,34 +110,51 @@ async function fetchTitle(url) {
 }
 
 async function processTranscript(transcript) {
-  const scorePrompt = `SCORING_PROMPT\n\n${transcript}`;
+  const scorePrompt = `${options.scorePrompt}\n\n${transcript}`;
   const scoreRes = await runChatPrompt(scorePrompt);
   let score = {};
   try { score = JSON.parse(scoreRes); } catch (e) {}
-  const articleRes = await runChatPrompt(`REWRITE_PROMPT\n\n${transcript}`);
+  const articleRes = await runChatPrompt(`${options.rewritePrompt}\n\n${transcript}`);
   return { score, article: articleRes, transcript };
 }
 
 async function runChatPrompt(prompt) {
   const res = await chrome.scripting.executeScript({
     target: { tabId: gptTabId },
-    func: (p) => {
-      const box = document.querySelector('textarea');
-      if (!box) return '';
-      box.value = p;
-      box.dispatchEvent(new Event('input', { bubbles: true }));
-      box.form.querySelector('button')?.click();
-      return new Promise(resolve => {
-        const obs = new MutationObserver(() => {
-          const nodes = document.querySelectorAll('.markdown');
-          const last = nodes[nodes.length - 1];
-          if (last && last.textContent.trim()) {
-            obs.disconnect();
-            resolve(last.textContent);
-          }
+    func: async (p) => {
+      const maybeNewChatBtn = document.querySelector('a[data-testid="create-new-chat-button"]');
+      if (window.location.pathname === '/' && maybeNewChatBtn) {
+        maybeNewChatBtn.click();
+      }
+
+      function sendPrompt(text) {
+        const box = document.querySelector('textarea[name="prompt-textarea"]');
+        if (!box) return;
+        box.value = text;
+        box.dispatchEvent(new Event('input', {bubbles: true}));
+        box.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));
+      }
+
+      function waitForAssistantReply() {
+        return new Promise(resolve => {
+          const thread = document.getElementById('thread-bottom-container') || document.body;
+          const pickLast = () =>
+            thread.querySelectorAll('[data-message-author-role="assistant"]').pop();
+          const ready = pickLast();
+          if (ready) return resolve(ready.innerText);
+          const mo = new MutationObserver(() => {
+            const node = pickLast();
+            if (node && node.innerText.trim()) {
+              mo.disconnect();
+              resolve(node.innerText);
+            }
+          });
+          mo.observe(thread, { childList: true, subtree: true });
         });
-        obs.observe(document.body, { childList: true, subtree: true });
-      });
+      }
+
+      sendPrompt(p);
+      return await waitForAssistantReply();
     },
     args: [prompt]
   });
@@ -145,4 +183,11 @@ async function watchAndReact(url, like) {
     args: [like]
   });
   setTimeout(() => chrome.tabs.remove(id), 15000);
+}
+
+function cleanupTabs() {
+  if (ytTabId) chrome.tabs.remove(ytTabId);
+  if (gptTabId) chrome.tabs.remove(gptTabId);
+  ytTabId = null;
+  gptTabId = null;
 }

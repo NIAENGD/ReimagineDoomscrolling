@@ -13,7 +13,14 @@
     <label>Count <input type="number" id="count" value="6" min="1" max="20" style="width:60px"></label>
   </div>
   <div>
-    <label>Model <input id="model" value="gpt-3.5-turbo" style="width:130px"></label>
+    <label>Scoring prompt<br>
+      <textarea id="scorePrompt" rows="6" style="width:100%"></textarea>
+    </label>
+  </div>
+  <div>
+    <label>Rewrite prompt<br>
+      <textarea id="rewritePrompt" rows="4" style="width:100%"></textarea>
+    </label>
   </div>
   <button id="start">Start</button>
   <button id="stop">Stop</button>

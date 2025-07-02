@@ -23,3 +23,9 @@ needed. The Chrome extension in the `extension/` folder handles scoring and the
 results page internally. Load the folder as an unpacked extension and use the
 popup to start collecting links. Each link is sent to the server only when a
 transcript is required.
+
+The popup now lets you customise the scoring and rewriting prompts. Choose the
+desired ChatGPT model manually within the ChatGPT tab—the extension simply sends
+your prompts to whatever model is active.
+Before starting, ensure you are logged into both sites. The popup checks for cookies and refuses to run if either account is missing.
+Once processing completes the extension automatically closes the hidden YouTube and ChatGPT tabs.
