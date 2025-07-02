@@ -19,8 +19,8 @@ python server.py [--whisper-model medium] [--whisper-language ja]
 ```
 
 Windows users can run `run_app.bat` for a small menu that installs or
-uninstalls the requirements, updates the repository and launches the
-server. A separate
+uninstalls the requirements. The menu also includes an option to update the
+repository from GitHub before launching the server. A separate
 `package.py` script creates a distributable zip containing the server
 and Chrome extension:
 

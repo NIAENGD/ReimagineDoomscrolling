@@ -37,7 +37,7 @@ if "%choice%"=="5" (
     goto menu
 )
 if "%choice%"=="6" (
-    git -C "%~dp0" pull
+    git -C "%~dp0." pull
     pause
     goto menu
 )
