@@ -1,6 +1,8 @@
 let running = false;
 let ytTabId = null;
 let gptTabId = null;
+let ytWindowId = null;
+let gptWindowId = null;
 let options = { count: 6, scorePrompt: '', rewritePrompt: '' };
 let articles = [];
 chrome.storage.local.get('articles', data => { articles = data.articles || []; });
@@ -114,8 +116,12 @@ function waitTabComplete(tabId) {
 
 async function openTabs() {
   cleanupTabs();
-  ytTabId = await openTab('https://www.youtube.com');
-  gptTabId = await openTab('https://chatgpt.com');
+  const yt = await openPopup('https://www.youtube.com');
+  ytWindowId = yt.windowId;
+  ytTabId = yt.tabId;
+  const gpt = await openPopup('https://chatgpt.com');
+  gptWindowId = gpt.windowId;
+  gptTabId = gpt.tabId;
 }
 
 async function collectLinks(tabId, count) {
@@ -261,8 +267,18 @@ async function watchAndReact(url, like) {
 }
 
 function cleanupTabs() {
-  if (ytTabId) chrome.tabs.remove(ytTabId);
-  if (gptTabId) chrome.tabs.remove(gptTabId);
+  if (ytWindowId) {
+    chrome.windows.remove(ytWindowId);
+  } else if (ytTabId) {
+    chrome.tabs.remove(ytTabId);
+  }
+  if (gptWindowId) {
+    chrome.windows.remove(gptWindowId);
+  } else if (gptTabId) {
+    chrome.tabs.remove(gptTabId);
+  }
   ytTabId = null;
+  ytWindowId = null;
   gptTabId = null;
+  gptWindowId = null;
 }
