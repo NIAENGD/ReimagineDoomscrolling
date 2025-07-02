@@ -207,35 +207,10 @@ async function runChatPrompt(prompt) {
       if (window.location.pathname === '/' && maybeNewChatBtn) {
         maybeNewChatBtn.click();
       }
-
-      function sendPrompt(text) {
-        const box = document.querySelector('textarea[name="prompt-textarea"]');
-        if (!box) return;
-        box.value = text;
-        box.dispatchEvent(new Event('input', {bubbles: true}));
-        box.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));
+      if (window.sendPrompt) {
+        return await window.sendPrompt(p);
       }
-
-      function waitForAssistantReply() {
-        return new Promise(resolve => {
-          const thread = document.getElementById('thread-bottom-container') || document.body;
-          const pickLast = () =>
-            thread.querySelectorAll('[data-message-author-role="assistant"]').pop();
-          const ready = pickLast();
-          if (ready) return resolve(ready.innerText);
-          const mo = new MutationObserver(() => {
-            const node = pickLast();
-            if (node && node.innerText.trim()) {
-              mo.disconnect();
-              resolve(node.innerText);
-            }
-          });
-          mo.observe(thread, { childList: true, subtree: true });
-        });
-      }
-
-      sendPrompt(p);
-      return await waitForAssistantReply();
+      return '';
     },
     args: [prompt]
   });
