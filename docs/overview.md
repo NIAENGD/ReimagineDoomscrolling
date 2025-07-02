@@ -17,13 +17,12 @@ The new application consists of a local helper server and a browser extension.
 
 ### Local Helper Server
 - Runs Whisper for speech-to-text when subtitle tracks are unavailable.
-- Hosts a small web interface to view analysed videos and their rewritten articles.
-- Communicates with the extension to receive audio snippets and return transcripts.
+- Provides a simple HTTP API so the extension can request transcripts.
 
 ### Processing Steps
-1. Extension gathers video links and downloads official subtitles using `yt-dlp`. If no subtitles exist, it retrieves audio and requests transcription from the local server.
-2. Each transcript is sent to ChatGPT twice: first to score the video using several criteria, then to rewrite it as a full article in the style of the original creator.
-3. Results are stored locally and served on a web page sorted by total score. Users can read each article, like or dislike it and optionally trigger an automated watch-through/feedback action in the hidden YouTube tab.
+1. The extension gathers video links and attempts to download official subtitles. If none are available it requests audio transcription from the local server.
+2. Each transcript is processed inside the extension using a hidden ChatGPT tab—first for scoring, then for rewriting as an article.
+3. Results are stored in extension storage and presented on an internal page sorted by total score. Users can like or dislike a video which triggers optional watch-through actions in the hidden YouTube tab.
 
 ## Default Prompts
 ### Scoring

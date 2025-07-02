@@ -6,7 +6,7 @@ const ytStatusEl = document.getElementById('ytStatus');
 const gptStatusEl = document.getElementById('gptStatus');
 
 document.getElementById('open').addEventListener('click', () => {
-  chrome.tabs.create({ url: 'http://localhost:5001' });
+  chrome.tabs.create({ url: chrome.runtime.getURL('results.html') });
 });
 
 document.getElementById('start').addEventListener('click', async () => {

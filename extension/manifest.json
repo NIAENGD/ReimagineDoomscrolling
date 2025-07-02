@@ -14,11 +14,5 @@
     "http://localhost:5001/*",
     "https://www.youtube.com/*",
     "https://chat.openai.com/*"
-  ],
-  "content_scripts": [
-    {
-      "matches": ["http://localhost:5001/*"],
-      "js": ["inject.js"]
-    }
   ]
 }

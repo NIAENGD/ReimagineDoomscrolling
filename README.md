@@ -8,15 +8,15 @@ See [docs/overview.md](docs/overview.md) for the current high level design, incl
 
 ## Quick start
 
-Install dependencies and run the helper server (set `OPENAI_API_KEY` in your environment to enable scoring and rewriting):
+Install dependencies and run the helper server. It only provides a local endpoint for Whisper transcription so no API keys are required:
 
 ```bash
 pip install -r requirements.txt
 python server.py
 ```
 
-The server exposes a small API for transcription and processing. See
-`server.py` for details. A very simple Chrome extension is provided in the
-`extension/` folder. Load this folder as an unpacked extension and use the popup
-to start collecting links from your YouTube feed. Each link will be sent to the
-local server for analysis.
+The server exposes a small API for fetching subtitles and running Whisper when
+needed. The Chrome extension in the `extension/` folder handles scoring and the
+results page internally. Load the folder as an unpacked extension and use the
+popup to start collecting links. Each link is sent to the server only when a
+transcript is required.
