@@ -6,15 +6,42 @@ import tempfile
 from pathlib import Path
 
 from flask import Flask, jsonify, request
+import sqlite3
+
+# Default Whisper settings
+WHISPER_MODEL = "small"
+WHISPER_LANGUAGE = "en"
 
 app = Flask(__name__)
+
+# Path for local database
+DB_PATH = Path("articles.db")
 
 # Directory for temporary downloads
 TMP_BASE = Path(tempfile.gettempdir()) / "yt_tmp"
 TMP_BASE.mkdir(parents=True, exist_ok=True)
 
 
-def fetch_subtitles(url: str) -> str:
+def init_db() -> None:
+    """Ensure the SQLite database exists with the required table."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS articles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT UNIQUE,
+                title TEXT,
+                score TEXT,
+                article TEXT,
+                transcript TEXT,
+                liked INTEGER DEFAULT 0,
+                disliked INTEGER DEFAULT 0
+            )
+            """
+        )
+
+
+def fetch_subtitles(url: str, lang: str = WHISPER_LANGUAGE) -> str:
     """Return subtitles text for the given YouTube URL if available."""
     with tempfile.TemporaryDirectory(dir=TMP_BASE) as td:
         out = Path(td) / "%(id)s"
@@ -23,7 +50,7 @@ def fetch_subtitles(url: str) -> str:
             "--skip-download",
             "--write-auto-sub",
             "--sub-lang",
-            "en",
+            lang,
             "-o",
             str(out),
             url,
@@ -35,16 +62,20 @@ def fetch_subtitles(url: str) -> str:
     return ""
 
 
-def whisper_transcribe(audio_path: Path) -> str:
+def whisper_transcribe(
+    audio_path: Path,
+    model: str = WHISPER_MODEL,
+    language: str = WHISPER_LANGUAGE,
+) -> str:
     """Transcribe audio using the local Whisper CLI."""
     out_dir = audio_path.parent
     cmd = [
         "whisper",
         str(audio_path),
         "--model",
-        "small",
+        model,
         "--language",
-        "en",
+        language,
         "--output-format",
         "txt",
         "--output_dir",
@@ -64,7 +95,7 @@ def api_subtitles() -> jsonify:
     if not url:
         return jsonify({"error": "missing url"}), 400
 
-    transcript = fetch_subtitles(url)
+    transcript = fetch_subtitles(url, WHISPER_LANGUAGE)
     if not transcript:
         with tempfile.TemporaryDirectory(dir=TMP_BASE) as td:
             audio = Path(td) / "audio"
@@ -82,9 +113,88 @@ def api_subtitles() -> jsonify:
             )
             audio_file = audio.with_suffix(".webm")
             if audio_file.exists():
-                transcript = whisper_transcribe(audio_file)
+                transcript = whisper_transcribe(audio_file, WHISPER_MODEL, WHISPER_LANGUAGE)
 
     return jsonify({"transcript": transcript})
+
+
+@app.route("/api/article", methods=["POST"])
+def api_article() -> jsonify:
+    """Persist a processed article and return its ID."""
+    data = request.get_json(force=True) or {}
+    url = data.get("url")
+    if not url:
+        return jsonify({"error": "missing url"}), 400
+
+    title = data.get("title", "")
+    score = json.dumps(data.get("score") or {})
+    article_text = data.get("article", "")
+    transcript = data.get("transcript", "")
+    liked = int(bool(data.get("liked")))
+    disliked = int(bool(data.get("disliked")))
+
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """
+            INSERT INTO articles (url, title, score, article, transcript, liked, disliked)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(url) DO UPDATE SET
+                title=excluded.title,
+                score=excluded.score,
+                article=excluded.article,
+                transcript=excluded.transcript,
+                liked=excluded.liked,
+                disliked=excluded.disliked
+            """,
+            (url, title, score, article_text, transcript, liked, disliked),
+        )
+        row = conn.execute("SELECT id FROM articles WHERE url=?", (url,)).fetchone()
+    return jsonify({"id": row[0]})
+
+
+@app.route("/api/articles")
+def api_articles() -> jsonify:
+    """Return list of stored articles."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT id, url, title, score, liked, disliked FROM articles"
+        ).fetchall()
+    articles = []
+    for r in rows:
+        score = json.loads(r["score"] or "{}")
+        articles.append(
+            {
+                "id": r["id"],
+                "url": r["url"],
+                "title": r["title"],
+                "score": score,
+                "liked": bool(r["liked"]),
+                "disliked": bool(r["disliked"]),
+            }
+        )
+    return jsonify({"articles": articles})
+
+
+@app.route("/api/article/<int:aid>")
+def api_get_article(aid: int) -> jsonify:
+    """Return a single stored article."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM articles WHERE id=?", (aid,)).fetchone()
+    if not row:
+        return jsonify({"error": "not found"}), 404
+    article = {
+        "id": row["id"],
+        "url": row["url"],
+        "title": row["title"],
+        "score": json.loads(row["score"] or "{}"),
+        "article": row["article"],
+        "transcript": row["transcript"],
+        "liked": bool(row["liked"]),
+        "disliked": bool(row["disliked"]),
+    }
+    return jsonify(article)
 
 
 @app.route("/")
@@ -95,10 +205,33 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Local helper server")
-    parser.add_argument("--host", default="0.0.0.0",
-                        help="interface to bind (default 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=5001,
-                        help="port to use (default 5001)")
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="interface to bind (default 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=5001,
+        help="port to use (default 5001)",
+    )
+    parser.add_argument(
+        "--whisper-model",
+        default=WHISPER_MODEL,
+        help="Whisper model size (default small)",
+    )
+    parser.add_argument(
+        "--whisper-language",
+        default=WHISPER_LANGUAGE,
+        help="Language code for Whisper and subtitles (default en)",
+    )
+
     args = parser.parse_args()
+
+    WHISPER_MODEL = args.whisper_model
+    WHISPER_LANGUAGE = args.whisper_language
+
+    init_db()
 
     app.run(host=args.host, port=args.port)

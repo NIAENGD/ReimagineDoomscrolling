@@ -14,16 +14,25 @@ Install dependencies and run the helper server. It only provides a local endpoin
 pip install -r requirements.txt
 # also ensure the helper CLIs are installed
 pip install yt-dlp openai-whisper
-python server.py
+# optional flags let you choose the Whisper model and language
+python server.py [--whisper-model medium] [--whisper-language ja]
 ```
 
-Windows users can run `run_app.bat` for a small menu that installs
-dependencies or launches the server.
+Windows users can run `run_app.bat` for a small menu that installs or
+uninstalls the requirements and launches the server. A separate
+`package.py` script creates a distributable zip containing the server
+and Chrome extension:
+
+```bash
+python package.py
+```
+The archive is written to the `dist/` folder.
 
 The server exposes a small API for fetching subtitles and running Whisper when
-needed. The Chrome extension in the `extension/` folder handles scoring and the
-results page internally. Load the folder as an unpacked extension and use the
-popup to start collecting links. Each link is sent to the server only when a
+needed. Results are now persisted in a local SQLite database (`articles.db`).
+The Chrome extension in the `extension/` folder shows a basic reader UI that
+loads articles from the server. Load the folder as an unpacked extension and use
+the popup to start collecting links. Each link is sent to the server only when a
 transcript is required.
 
 The popup now lets you customise the scoring and rewriting prompts. Choose the
@@ -34,10 +43,7 @@ Once processing completes the extension automatically closes the hidden YouTube 
 
 ## Development status
 
-This project remains experimental and many features are incomplete. Planned work includes:
-
-- A richer reader interface for processed articles
-- Persisting results across sessions
-- More configuration around Whisper models and languages
+This project remains experimental. Recent updates added a simple reader UI,
+database-backed storage and a packaging script for easier distribution.
 
 See [TODO.md](TODO.md) for additional notes.

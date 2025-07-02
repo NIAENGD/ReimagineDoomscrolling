@@ -1,10 +1,9 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const params = new URLSearchParams(location.search);
   const id = Number(params.get('id'));
-  const data = await chrome.storage.local.get('articles');
-  const articles = data.articles || [];
-  const v = articles.find(a => a.id === id);
-  if (!v) return;
+  const resp = await fetch(`http://localhost:5001/api/article/${id}`);
+  if (!resp.ok) return;
+  const v = await resp.json();
   document.getElementById('title').textContent = v.title || v.url;
   const table = document.getElementById('scores');
   const keys = ['logic','depth','insight','expression','inspiration','overallQuality'];
@@ -21,16 +20,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   const dislikeBtn = document.getElementById('dislike');
   if (v.liked) likeBtn.disabled = true;
   if (v.disliked) dislikeBtn.disabled = true;
-  likeBtn.addEventListener('click', () => {
+  likeBtn.addEventListener('click', async () => {
     chrome.runtime.sendMessage({cmd: 'watchLike', url: v.url});
     v.liked = true; v.disliked = false;
-    chrome.storage.local.set({articles});
+    await fetch('http://localhost:5001/api/article', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(v)
+    });
     likeBtn.disabled = true; dislikeBtn.disabled = false;
   });
-  dislikeBtn.addEventListener('click', () => {
+  dislikeBtn.addEventListener('click', async () => {
     chrome.runtime.sendMessage({cmd: 'watchDislike', url: v.url});
     v.disliked = true; v.liked = false;
-    chrome.storage.local.set({articles});
+    await fetch('http://localhost:5001/api/article', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(v)
+    });
     dislikeBtn.disabled = true; likeBtn.disabled = false;
   });
 });

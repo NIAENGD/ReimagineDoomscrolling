@@ -5,6 +5,20 @@ let options = { count: 6, scorePrompt: '', rewritePrompt: '' };
 let articles = [];
 chrome.storage.local.get('articles', data => { articles = data.articles || []; });
 
+async function persistArticle(a) {
+  try {
+    const resp = await fetch('http://localhost:5001/api/article', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(a)
+    });
+    const data = await resp.json();
+    if (data.id) a.id = data.id;
+  } catch (e) {
+    console.error('persistArticle', e);
+  }
+}
+
 chrome.action.onClicked.addListener(() => {
   chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') });
 });
@@ -38,7 +52,9 @@ async function startProcessing() {
     const transcript = await fetchTranscript(url);
     const result = await processTranscript(transcript);
     const title = await fetchTitle(url);
-    articles.push({id: articles.length + 1, url, title, ...result});
+    const article = {id: articles.length + 1, url, title, ...result};
+    await persistArticle(article);
+    articles.push(article);
     done++;
     chrome.runtime.sendMessage({progress: Math.round(done/links.length*100), status: `processed ${done}/${links.length}`});
   }

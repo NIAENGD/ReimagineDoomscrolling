@@ -1,32 +1,41 @@
 @echo off
 setlocal
+set EXT_DIR=%~dp0extension
 
 :menu
 echo ReimagineDoomscrolling Helper
 
 echo 1. Install Python requirements
-
-echo 2. Start local server
-
-echo 3. Start server and open browser
-
-echo 4. Exit
-set /p choice="Select option [1-4]: "
+echo 2. Uninstall Python requirements
+echo 3. Start local server
+echo 4. Start server and open browser
+echo 5. Open extension folder
+echo 6. Exit
+set /p choice="Select option [1-6]: "
 if "%choice%"=="1" (
-    pip install -r requirements.txt
+    pip install -r "%~dp0requirements.txt"
     pause
     goto menu
 )
 if "%choice%"=="2" (
+    pip uninstall -y -r "%~dp0requirements.txt"
+    pause
+    goto menu
+)
+if "%choice%"=="3" (
     python "%~dp0server.py" %*
     goto end
 )
-if "%choice%"=="3" (
+if "%choice%"=="4" (
     start "" http://localhost:5001
     python "%~dp0server.py" %*
     goto end
 )
-if "%choice%"=="4" goto end
+if "%choice%"=="5" (
+    start "" "%EXT_DIR%"
+    goto menu
+)
+if "%choice%"=="6" goto end
 
 echo Invalid option
 pause
