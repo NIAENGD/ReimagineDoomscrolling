@@ -13,6 +13,7 @@
   "host_permissions": [
     "http://localhost:5001/*",
     "https://www.youtube.com/*",
-    "https://chat.openai.com/*"
+    "https://chat.openai.com/*",
+    "https://chatgpt.com/*"
   ]
 }

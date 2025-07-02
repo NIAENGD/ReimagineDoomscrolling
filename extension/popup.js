@@ -67,9 +67,10 @@ const DEFAULT_REWRITE_PROMPT = `以原作者视角，忠实呈现视频中的观
 async function checkLogin() {
   const yt = await chrome.cookies.getAll({ url: 'https://www.youtube.com' });
   const gpt = await chrome.cookies.getAll({ url: 'https://chat.openai.com' });
+  const gptAlt = await chrome.cookies.getAll({ url: 'https://chatgpt.com' });
   ytStatusEl.textContent = yt.length ? 'YouTube: logged in' : '';
-  gptStatusEl.textContent = gpt.length ? 'ChatGPT: logged in' : '';
-  return yt.length > 0 && gpt.length > 0;
+  gptStatusEl.textContent = (gpt.length || gptAlt.length) ? 'ChatGPT: logged in' : '';
+  return yt.length > 0 && (gpt.length > 0 || gptAlt.length > 0);
 }
 
 document.getElementById('openTabs').addEventListener('click', () => {
