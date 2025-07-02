@@ -5,6 +5,10 @@ let options = { count: 6 };
 let articles = [];
 chrome.storage.local.get('articles', data => { articles = data.articles || []; });
 
+chrome.action.onClicked.addListener(() => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('main.html') });
+});
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.cmd === 'start') {
     options = Object.assign(options, msg.opts || {});
@@ -43,7 +47,9 @@ async function startProcessing() {
 
 function openTab(url) {
   return new Promise(resolve => {
-    chrome.tabs.create({url, active: false}, tab => resolve(tab.id));
+    chrome.windows.create({url, focused: false, type: 'popup'}, win => {
+      resolve(win.tabs[0].id);
+    });
   });
 }
 

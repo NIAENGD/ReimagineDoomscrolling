@@ -20,6 +20,7 @@ dependencies or launches the server.
 
 The server exposes a small API for fetching subtitles and running Whisper when
 needed. The Chrome extension in the `extension/` folder handles scoring and the
-results page internally. Load the folder as an unpacked extension and use the
-popup to start collecting links. Each link is sent to the server only when a
-transcript is required.
+results page internally. Load the folder as an unpacked extension and click the
+toolbar icon to open the main page. From there press **Launch** to begin
+collecting links. Each link is sent to the server only when a transcript is
+required.
