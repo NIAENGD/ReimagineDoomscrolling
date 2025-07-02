@@ -5,6 +5,10 @@ let options = { count: 6, scorePrompt: '', rewritePrompt: '' };
 let articles = [];
 chrome.storage.local.get('articles', data => { articles = data.articles || []; });
 
+function log(msg) {
+  chrome.runtime.sendMessage({ log: msg });
+}
+
 async function persistArticle(a) {
   try {
     const resp = await fetch('http://localhost:5001/api/article', {
@@ -45,15 +49,18 @@ async function startProcessing() {
   if (!ytTabId || !gptTabId) {
     await openTabs();
   }
+  log('gathering links...');
   chrome.runtime.sendMessage({status: 'gathering links...', progress: 0});
   const links = await collectLinks(ytTabId, options.count);
+  log('processing ' + links.length + ' videos');
   chrome.runtime.sendMessage({status: 'processing ' + links.length + ' videos', progress: 0});
   let done = 0;
   for (const url of links) {
     if (!running) break;
-    const transcript = await fetchTranscript(url);
-    const result = await processTranscript(transcript);
     const title = await fetchTitle(url);
+    log('processing video: ' + title);
+    const transcript = await fetchTranscript(url);
+    const result = await processTranscript(transcript, title);
     const article = {id: articles.length + 1, url, title, ...result};
     await persistArticle(article);
     articles.push(article);
@@ -61,6 +68,7 @@ async function startProcessing() {
     chrome.runtime.sendMessage({progress: Math.round(done/links.length*100), status: `processed ${done}/${links.length}`});
   }
   chrome.storage.local.set({articles});
+  log('done');
   chrome.runtime.sendMessage({status: 'done', progress: 100});
   running = false;
   cleanupTabs();
@@ -107,7 +115,12 @@ async function collectLinks(tabId, count) {
       args: [links],
     });
     const newLinks = (res[0] && res[0].result) || [];
-    for (const u of newLinks) if (!links.includes(u)) links.push(u);
+    for (const u of newLinks) {
+      if (!links.includes(u)) {
+        links.push(u);
+        log('link gathered: ' + u);
+      }
+    }
     if (links.length < count) await new Promise(r => setTimeout(r, 1000));
   }
   return links.slice(0, count);
@@ -133,11 +146,13 @@ async function fetchTitle(url) {
   return res[0]?.result || url;
 }
 
-async function processTranscript(transcript) {
+async function processTranscript(transcript, title) {
+  log('scoring: ' + title);
   const scorePrompt = `${options.scorePrompt}\n\n${transcript}`;
   const scoreRes = await runChatPrompt(scorePrompt);
   let score = {};
   try { score = JSON.parse(scoreRes); } catch (e) {}
+  log('rewriting: ' + title);
   const articleRes = await runChatPrompt(`${options.rewritePrompt}\n\n${transcript}`);
   return { score, article: articleRes, transcript };
 }
