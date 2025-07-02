@@ -4,6 +4,13 @@
   "version": "0.1",
   "description": "Collect and analyse YouTube feed videos",
   "permissions": ["tabs", "windows", "storage", "scripting", "cookies"],
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
+      "js": ["chatgpt.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "background": {
     "service_worker": "background.js"
   },
