@@ -8,19 +8,18 @@ See [docs/overview.md](docs/overview.md) for the current high level design, incl
 
 ## Quick start
 
-Install dependencies and run the helper server:
+Install dependencies and run the helper server. It only provides a local endpoint for Whisper transcription so no API keys are required:
 
 ```bash
 pip install -r requirements.txt
 python server.py
 ```
 
-Windows users can double-click `run_server.cmd` which simply runs the command
-above.
+Windows users can run `run_app.bat` for a small menu that installs
+dependencies or launches the server.
 
 The server exposes a small API for fetching subtitles and running Whisper when
 needed. The Chrome extension in the `extension/` folder handles scoring and the
 results page internally. Load the folder as an unpacked extension and use the
 popup to start collecting links. Each link is sent to the server only when a
 transcript is required.
-=======

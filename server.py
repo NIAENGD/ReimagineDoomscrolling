@@ -55,7 +55,7 @@ def whisper_transcribe(audio_path: Path) -> str:
     if txt_file.exists():
         return txt_file.read_text("utf-8")
     return ""
-
+  
 @app.route("/api/subtitles", methods=["POST"])
 def api_subtitles() -> jsonify:
     """Return a transcript for the requested YouTube URL."""
@@ -91,7 +91,14 @@ def api_subtitles() -> jsonify:
 def root():
     return "YT helper server running"
 
-
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Local helper server")
+    parser.add_argument("--host", default="0.0.0.0",
+                        help="interface to bind (default 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=5001,
+                        help="port to use (default 5001)")
+    args = parser.parse_args()
+
+    app.run(host=args.host, port=args.port)
