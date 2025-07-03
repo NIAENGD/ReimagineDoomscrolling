@@ -287,7 +287,10 @@ async function runChatPrompt(prompt) {
       function pos(el) {
         if (!el) return null;
         const r = el.getBoundingClientRect();
-        return { x: window.screenX + r.left + r.width / 2, y: window.screenY + r.top + r.height / 2 };
+        return {
+          x: Math.round(window.screenX + r.left + r.width / 2),
+          y: Math.round(window.screenY + r.top + r.height / 2)
+        };
       }
       return { newChat: window.location.pathname === '/' ? pos(newBtn) : null, composer: pos(composer), send: pos(send) };
     }

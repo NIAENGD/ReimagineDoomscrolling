@@ -132,7 +132,13 @@ def api_click() -> jsonify:
     y = data.get("y")
     if x is None or y is None:
         return jsonify({"error": "missing coordinates"}), 400
-    pyautogui.click(x, y)
+    try:
+        x = int(round(float(x)))
+        y = int(round(float(y)))
+    except (ValueError, TypeError):
+        return jsonify({"error": "invalid coordinates"}), 400
+    pyautogui.moveTo(x, y)
+    pyautogui.click()
     time.sleep(0.1)
     return jsonify({"status": "ok"})
 
