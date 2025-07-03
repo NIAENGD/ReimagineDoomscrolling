@@ -2,3 +2,5 @@ flask
 # command line helpers used by server
 yt-dlp
 openai-whisper
+pyautogui
+pygetwindow

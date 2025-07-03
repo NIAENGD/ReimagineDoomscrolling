@@ -3,7 +3,7 @@
   "name": "ReimagineDoomscrolling",
   "version": "0.1",
   "description": "Collect and analyse YouTube feed videos",
-  "permissions": ["tabs", "windows", "storage", "scripting", "cookies"],
+  "permissions": ["tabs", "windows", "storage", "scripting", "cookies", "system.display"],
   "content_scripts": [
     {
       "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
