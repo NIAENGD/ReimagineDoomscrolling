@@ -22,5 +22,13 @@
     "https://www.youtube.com/*",
     "https://chat.openai.com/*",
     "https://chatgpt.com/*"
-  ]
+  ],
+  "commands": {
+    "stop-processing": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+S"
+      },
+      "description": "Stop processing and shutdown server"
+    }
+  }
 }

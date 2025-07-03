@@ -45,6 +45,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
+chrome.commands.onCommand.addListener((command) => {
+  if (command === 'stop-processing') {
+    running = false;
+    cleanupTabs();
+    fetch('http://localhost:5001/shutdown', { method: 'POST' }).catch(() => {});
+  }
+});
+
 async function startProcessing() {
   if (running) return;
   running = true;
@@ -169,41 +177,41 @@ async function openTabs() {
 }
 
 async function collectLinks(tabId, count) {
-  let links = [];
-  for (let i = 0; i < 20 && links.length < count; i++) {
-    const res = await chrome.scripting.executeScript({
-      target: {tabId},
-      func: already => {
-        function getFrontPageVideos() {
-          const urls = [];
-          const grid = document.querySelector('ytd-rich-grid-renderer');
-          if (!grid) return urls;
-          grid.querySelectorAll('ytd-rich-item-renderer, ytd-reel-video-renderer, ytd-display-ad-renderer')
-            .forEach(tile => {
-              if (tile.tagName.includes('DISPLAY-AD') ||
-                  tile.tagName.includes('PROMOTED') ||
-                  tile.querySelector('[badge-style-type="ad"], span')?.textContent === 'Ad') return;
-              const link = tile.querySelector('a#thumbnail[href]');
-              if (!link) return;
-              if (link.getAttribute('href').startsWith('/shorts/')) return;
-              const url = new URL(link.getAttribute('href'), 'https://www.youtube.com').href;
-              if (!already.includes(url)) urls.push(url);
-            });
-          return urls;
-        }
-        window.scrollBy(0, window.innerHeight);
-        return getFrontPageVideos();
+  function gather(already = []) {
+    return chrome.scripting.executeScript({
+      target: { tabId },
+      func: (seen) => {
+        const urls = [];
+        const grid = document.querySelector('ytd-rich-grid-renderer');
+        if (!grid) return urls;
+        grid.querySelectorAll('ytd-rich-item-renderer, ytd-reel-video-renderer, ytd-display-ad-renderer')
+          .forEach(tile => {
+            if (tile.tagName.includes('DISPLAY-AD') ||
+                tile.tagName.includes('PROMOTED') ||
+                tile.querySelector('[badge-style-type="ad"], span')?.textContent === 'Ad') return;
+            const link = tile.querySelector('a#thumbnail[href]');
+            if (!link) return;
+            if (link.getAttribute('href').startsWith('/shorts/')) return;
+            const url = new URL(link.getAttribute('href'), 'https://www.youtube.com').href;
+            if (!seen.includes(url)) urls.push(url);
+          });
+        return urls;
       },
-      args: [links],
-    });
-    const newLinks = (res[0] && res[0].result) || [];
-    for (const u of newLinks) {
+      args: [already],
+    }).then(res => (res[0] && res[0].result) || []);
+  }
+
+  let links = await gather();
+  if (links.length < count) {
+    await chrome.scripting.executeScript({ target: { tabId }, func: () => window.scrollBy(0, window.innerHeight) });
+    await new Promise(r => setTimeout(r, 1000));
+    const more = await gather(links);
+    for (const u of more) {
       if (!links.includes(u)) {
         links.push(u);
         log('link gathered: ' + u);
       }
     }
-    if (links.length < count) await new Promise(r => setTimeout(r, 1000));
   }
   return links.slice(0, count);
 }
