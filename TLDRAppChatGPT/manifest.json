@@ -1,0 +1,41 @@
+{
+   "action": {
+      "default_icon": {
+         "48": "assets/icons/icon48.png"
+      }
+   },
+   "background": {
+      "service_worker": "background.js",
+      "type": "module"
+   },
+   "content_scripts": [ {
+      "exclude_matches": [ "https://*.google.com/*", "https://*.brave.com/*", "https://*.youtube.com/*" ],
+      "js": [ "webSummarizer.js" ],
+      "matches": [ "\u003Call_urls>" ]
+   }, {
+      "js": [ "aiPasteHandler.js" ],
+      "matches": [ "https://claude.ai/*", "https://chatgpt.com/*", "https://gemini.google.com/*", "https://chat.deepseek.com/*", "https://grok.com/*" ]
+   }, {
+      "css": [ "youtubeSummarizer.css" ],
+      "js": [ "youtubeSummarizer.js" ],
+      "matches": [ "*://*.youtube.com/*" ]
+   }, {
+      "all_frames": true,
+      "js": [ "embedOverlayRemover.js" ],
+      "matches": [ "*://*.youtube.com/embed/*", "*://*.youtube-nocookie.com/embed/*" ],
+      "run_at": "document_idle"
+   } ],
+   "description": "Instantly summarize webpages or YouTube video using your existing AI accounts (ChatGPT, etc) - no additional subscription required!",
+   "differential_fingerprint": "1.6837981233caca0ac6475cc35bc5db55d57d5032fd52e231f575d3358b7f428c",
+   "host_permissions": [ "https://claude.ai/*", "https://chatgpt.com/*", "https://gemini.google.com/*", "https://chat.deepseek.com/*", "https://grok.com/*" ],
+   "icons": {
+      "48": "assets/icons/icon48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuM/9aFX7R+tf2r38kkAu1CqD9A0vg/LOwdCnwyH1HzGGytyvixhvknW8EEb56QGgXTVkG2Wf8HEnpS8JpPiiE7xD15Hjz/a+fBvJKwnJIGdGIUKvpIniAl/XY1hTCoXimjsOqTMgxUjXEWx/ud8LEDVhMs4n9/iabQi0kzTSJT1mWN5mq7RbKs+lvLZ2c65obhf2QLm2tOcyfdY9X0K1hMff5R7eBMl2tOwZLkEefCxMVzYpc8SN6BuXyoWiKm5O6ts5xiCGGH63UOlWi7EVAsOvfkZ5Gv0mVknF0I8xGhXPW+CCVgP2Zz/wTrsOpqMJ2vVfLcSLjJ+2g6/nfMtLuwIDAQAB",
+   "manifest_version": 3,
+   "name": "justTLDR: Free AI Summarizer for YouTube and Web",
+   "options_page": "src/entries/options/index.html",
+   "permissions": [ "activeTab", "storage" ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "2.0.21"
+}
