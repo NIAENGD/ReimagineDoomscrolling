@@ -8,6 +8,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request
 import sqlite3
 import pyautogui
+import pyperclip
 import pygetwindow as gw
 import time
 
@@ -138,10 +139,12 @@ def api_click() -> jsonify:
 
 @app.route("/api/type", methods=["POST"])
 def api_type() -> jsonify:
-    """Type the given text using the keyboard."""
+    """Paste the given text via clipboard for faster input."""
     data = request.get_json(force=True) or {}
     text = data.get("text", "")
-    pyautogui.write(text, interval=0.02)
+    if text:
+        pyperclip.copy(text)
+        pyautogui.hotkey("ctrl", "v")
     return jsonify({"status": "ok"})
 
 
@@ -251,6 +254,15 @@ def api_get_article(aid: int) -> jsonify:
         "disliked": bool(row["disliked"]),
     }
     return jsonify(article)
+
+
+@app.route("/shutdown", methods=["POST"])
+def api_shutdown():
+    """Stop the Flask development server."""
+    func = request.environ.get("werkzeug.server.shutdown")
+    if func:
+        func()
+    return jsonify({"status": "shutting down"})
 
 
 @app.route("/")
