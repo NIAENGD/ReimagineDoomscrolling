@@ -116,7 +116,7 @@ function waitTabComplete(tabId) {
 
 // ensure ChatGPT content script has loaded
 async function ensureChatGPTReady() {
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 40; i++) {
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId: gptTabId },
       func: () => Boolean(window.sendPrompt)
@@ -221,7 +221,14 @@ async function runChatPrompt(prompt) {
   const res = await chrome.scripting.executeScript({
     target: { tabId: gptTabId },
     func: async (p) => {
-      const maybeNewChatBtn = document.querySelector('a[data-testid="create-new-chat-button"]');
+      const maybeNewChatBtn = document.querySelector(
+        [
+          'a[data-testid^="create-new-chat"]',
+          'button[data-testid^="new-chat"]',
+          'button[aria-label="New chat"]',
+          'a[href="/new"]'
+        ].join(', ')
+      );
       if (window.location.pathname === '/' && maybeNewChatBtn) {
         maybeNewChatBtn.click();
       }

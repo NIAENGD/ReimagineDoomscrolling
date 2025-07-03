@@ -27,14 +27,26 @@ function waitFor(selector, root = document, timeout = 30000) {
 // ChatGPT has switched from a <textarea> to a ProseMirror editor so we
 // support both patterns for forwards compatibility.
 async function getComposer() {
-  const selector = 'div[contenteditable="true"].ProseMirror, textarea[name="prompt-textarea"]';
+  const selector = [
+    'div[contenteditable="true"].ProseMirror',
+    'textarea[data-testid="prompt-textarea"]',
+    'textarea[name="prompt-textarea"]',
+    'textarea[data-id="prompt-textarea"]',
+    'textarea[placeholder*="Ask"]'
+  ].join(', ');
   const editable = document.querySelector(selector) || await waitFor(selector);
   const isTextarea = editable.tagName.toLowerCase() === 'textarea';
   return {
     node: editable,
     isTextarea,
     sendButton() {
-      return editable.closest('form')?.querySelector('button[aria-label^="Send"]');
+      return editable.closest('form')?.querySelector(
+        [
+          'button[data-testid="send-button"]',
+          'button[aria-label^="Send"]',
+          'button svg[data-testid="send"]'
+        ].join(', ')
+      );
     }
   };
 }
@@ -52,6 +64,10 @@ function dispatchInputLikeEvents(el) {
   el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
 // Send a prompt and resolve with assistant reply text
 async function sendPromptInternal(promptText) {
   const { node, isTextarea, sendButton } = await getComposer();
@@ -66,6 +82,8 @@ async function sendPromptInternal(promptText) {
     node.appendChild(p);
     dispatchInputLikeEvents(node);
   }
+
+  await sleep(100);
 
   const btn = sendButton();
   if (btn) {
