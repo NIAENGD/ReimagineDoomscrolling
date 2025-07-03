@@ -81,23 +81,35 @@ async function startProcessing() {
   cleanupTabs();
 }
 
-function openTab(url) {
+function openTab(url, windowId = null) {
   return new Promise(resolve => {
-    chrome.tabs.create({url, active: false}, tab => resolve(tab.id));
+    chrome.tabs.create({ url, active: false, windowId }, tab => resolve(tab.id));
   });
 }
 
-// open a minimised popup window for a URL, returning both window and tab ids
-function openPopup(url) {
+// open a popup window or tab. if opts.windowId is provided a new tab is opened
+// in that window instead of creating a new window. otherwise a popup window is
+// created with optional positioning.
+function openPopup(url, opts = {}) {
   return new Promise(resolve => {
-    chrome.windows.create({
-      url,
-      type: 'popup',
-      focused: true,
-      state: 'normal'
-    }, win => {
-      resolve({ windowId: win.id, tabId: win.tabs[0].id });
-    });
+    if (opts.windowId) {
+      chrome.tabs.create({ url, active: false, windowId: opts.windowId }, tab => {
+        resolve({ windowId: opts.windowId, tabId: tab.id, createdWindow: false });
+      });
+    } else {
+      chrome.windows.create({
+        url,
+        type: 'popup',
+        focused: true,
+        state: 'normal',
+        left: opts.left,
+        top: opts.top,
+        width: opts.width,
+        height: opts.height
+      }, win => {
+        resolve({ windowId: win.id, tabId: win.tabs[0].id, createdWindow: true });
+      });
+    }
   });
 }
 
@@ -129,15 +141,31 @@ async function ensureChatGPTReady() {
 
 async function openTabs() {
   cleanupTabs();
-  const yt = await openPopup('https://www.youtube.com');
+  const displays = await chrome.system.display.getInfo();
+  const { workArea } = displays[0];
+  const halfWidth = Math.floor(workArea.width / 2);
+
+  const yt = await openPopup('https://www.youtube.com', {
+    left: workArea.left,
+    top: workArea.top,
+    width: halfWidth,
+    height: workArea.height
+  });
   ytWindowId = yt.windowId;
   ytTabId = yt.tabId;
   await waitTabComplete(ytTabId);
-  const gpt = await openPopup('https://chatgpt.com');
+
+  const gpt = await openPopup('https://chatgpt.com', {
+    left: workArea.left + halfWidth,
+    top: workArea.top,
+    width: workArea.width - halfWidth,
+    height: workArea.height
+  });
   gptWindowId = gpt.windowId;
   gptTabId = gpt.tabId;
   await waitTabComplete(gptTabId);
   await ensureChatGPTReady();
+  fetch('http://localhost:5001/api/arrange', { method: 'POST' }).catch(() => {});
 }
 
 async function collectLinks(tabId, count) {
@@ -191,16 +219,20 @@ async function fetchTranscript(url) {
 }
 
 async function fetchTitle(url) {
-  const { windowId, tabId } = await openPopup(url);
-  await waitTabComplete(tabId);
+  const popup = await openPopup(url, ytWindowId ? { windowId: ytWindowId } : {});
+  await waitTabComplete(popup.tabId);
   try {
     const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId },
+      target: { tabId: popup.tabId },
       func: () => document.title || ''
     });
     return result || url;
   } finally {
-    chrome.windows.remove(windowId);
+    if (popup.createdWindow) {
+      chrome.windows.remove(popup.windowId);
+    } else {
+      chrome.tabs.remove(popup.tabId);
+    }
   }
 }
 
@@ -218,10 +250,10 @@ async function processTranscript(transcript, title) {
 async function runChatPrompt(prompt) {
   const ready = await ensureChatGPTReady();
   if (!ready) throw new Error('ChatGPT not ready');
-  const res = await chrome.scripting.executeScript({
+  const [{ result: coords }] = await chrome.scripting.executeScript({
     target: { tabId: gptTabId },
-    func: async (p) => {
-      const maybeNewChatBtn = document.querySelector(
+    func: () => {
+      const newBtn = document.querySelector(
         [
           'a[data-testid^="create-new-chat"]',
           'button[data-testid^="new-chat"]',
@@ -229,18 +261,59 @@ async function runChatPrompt(prompt) {
           'a[href="/new"]'
         ].join(', ')
       );
-      if (window.location.pathname === '/' && maybeNewChatBtn) {
-        maybeNewChatBtn.click();
+      const compSel = [
+        'div[contenteditable="true"].ProseMirror',
+        'textarea[data-testid="prompt-textarea"]',
+        'textarea[name="prompt-textarea"]',
+        'textarea[data-id="prompt-textarea"]',
+        'textarea[placeholder*="Ask"]'
+      ].join(', ');
+      const composer = document.querySelector(compSel);
+      const send = composer?.closest('form')?.querySelector(
+        [
+          'button[data-testid="send-button"]',
+          'button[aria-label^="Send"]',
+          'button svg[data-testid="send"]'
+        ].join(', ')
+      );
+      function pos(el) {
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { x: window.screenX + r.left + r.width / 2, y: window.screenY + r.top + r.height / 2 };
       }
-      return await window.sendPrompt(p);
-    },
-    args: [prompt]
+      return { newChat: window.location.pathname === '/' ? pos(newBtn) : null, composer: pos(composer), send: pos(send) };
+    }
   });
-  return res[0]?.result || '';
+
+  async function post(url, body) {
+    await fetch('http://localhost:5001' + url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  }
+
+  if (coords.newChat) {
+    await post('/api/click', coords.newChat);
+    await new Promise(r => setTimeout(r, 500));
+  }
+  if (coords.composer) {
+    await post('/api/click', coords.composer);
+    await post('/api/type', { text: prompt });
+  }
+  if (coords.send) {
+    await post('/api/click', coords.send);
+  }
+
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId: gptTabId },
+    func: () => window.waitAssistantReply && window.waitAssistantReply()
+  });
+  return result || '';
 }
 
 async function watchAndReact(url, like) {
-  const id = await openTab(url);
+  const id = await openTab(url, ytWindowId);
   await chrome.scripting.executeScript({
     target: {tabId: id},
     func: (like) => {

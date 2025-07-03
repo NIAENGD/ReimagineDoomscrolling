@@ -31,7 +31,12 @@ python package.py
 The archive is written to the `dist/` folder.
 
 The server exposes a small API for fetching subtitles and running Whisper when
-needed. Results are now persisted in a local SQLite database (`articles.db`).
+needed. Results are now persisted in a local SQLite database (`articles.db`). It
+can also automate the browser via `pyautogui` with simple `/api/click` and
+`/api/type` endpoints used by the extension when talking to ChatGPT. The new
+`/api/arrange` endpoint places the ChatGPT and YouTube windows side by side.
+When transcripts are missing the server downloads the lowest quality audio it
+can before running Whisper to save bandwidth.
 The Chrome extension in the `extension/` folder shows a basic reader UI that
 loads articles from the server. Load the folder as an unpacked extension and use
 the popup to start collecting links. Each link is sent to the server only when a
@@ -41,9 +46,9 @@ The popup now lets you customise the scoring and rewriting prompts. Choose the
 desired ChatGPT model manually within the ChatGPT tab—the extension simply sends
 your prompts to whatever model is active.
 Use the new **Open tabs** button to launch focused YouTube and ChatGPT popup
-windows. Once they load, click **Start** to begin processing. The extension no
-longer blocks you if login cookies are missing. When finished it automatically
-closes the popups.
+windows. They now open side by side so you can monitor both at once. Once they
+load, click **Start** to begin processing. The extension no longer blocks you if
+login cookies are missing. When finished it automatically closes the popups.
 
 ## Development status
 

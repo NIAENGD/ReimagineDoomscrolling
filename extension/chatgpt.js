@@ -23,6 +23,39 @@ function waitFor(selector, root = document, timeout = 30000) {
   });
 }
 
+async function waitAssistantReplyInternal() {
+  const thread = await waitFor('[data-message-author-role="assistant"]');
+  const existingIds = new Set(
+    Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'))
+         .map(n => n.getAttribute('data-message-id'))
+  );
+
+  return new Promise((resolve, reject) => {
+    const obs = new MutationObserver(muts => {
+      for (const m of muts) {
+        for (const n of m.addedNodes) {
+          if (
+            n.nodeType === 1 &&
+            n.matches?.('[data-message-author-role="assistant"]') &&
+            !existingIds.has(n.getAttribute('data-message-id'))
+          ) {
+            obs.disconnect();
+            const text = n.innerText.trim();
+            resolve(text);
+            return;
+          }
+        }
+      }
+    });
+    obs.observe(thread, { childList: true, subtree: true });
+
+    setTimeout(() => {
+      obs.disconnect();
+      reject(new Error('No assistant reply observed'));
+    }, 120000);
+  });
+}
+
 // Locate the editable box used for composing messages.
 // ChatGPT has switched from a <textarea> to a ProseMirror editor so we
 // support both patterns for forwards compatibility.
@@ -126,3 +159,4 @@ async function sendPromptInternal(promptText) {
 
 // expose globally for background script
 window.sendPrompt = sendPromptInternal;
+window.waitAssistantReply = waitAssistantReplyInternal;

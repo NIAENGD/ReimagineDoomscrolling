@@ -12,12 +12,17 @@ The new application consists of a local helper server and a browser extension.
 
 ### Browser Extension
 - Provides a control panel where the user can start or stop analysis, choose the number of videos to process and configure prompts.
-- Opens two focused popup windows: one for YouTube and one for ChatGPT. Both windows share the user's logged-in cookies.
+- Opens two focused popup windows—one for YouTube and one for ChatGPT—arranged
+  side by side. Both windows share the user's logged-in cookies.
 - Collects video links from the YouTube feed by scrolling until the desired number of items is gathered, excluding Shorts, ads and other irrelevant entries.
 
 ### Local Helper Server
 - Runs Whisper for speech-to-text when subtitle tracks are unavailable.
-- Provides a simple HTTP API so the extension can request transcripts.
+- Provides a simple HTTP API so the extension can request transcripts. When
+  subtitles are missing it downloads the lowest quality audio for Whisper.
+- Exposes endpoints for screen automation via `pyautogui` so ChatGPT can be
+  controlled through clicks and typed input. A helper endpoint arranges the two
+  popup windows side by side.
 
 ### Processing Steps
 1. The extension gathers video links and attempts to download official subtitles. If none are available it requests audio transcription from the local server.

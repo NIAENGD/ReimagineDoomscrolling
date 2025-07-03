@@ -7,6 +7,11 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request
 import sqlite3
+import pyautogui
+import pygetwindow as gw
+import time
+
+pyautogui.FAILSAFE = False
 
 # Default Whisper settings
 WHISPER_MODEL = "small"
@@ -103,7 +108,7 @@ def api_subtitles() -> jsonify:
                 [
                     "yt-dlp",
                     "-f",
-                    "bestaudio",
+                    "worstaudio",
                     "-o",
                     str(audio),
                     url,
@@ -116,6 +121,57 @@ def api_subtitles() -> jsonify:
                 transcript = whisper_transcribe(audio_file, WHISPER_MODEL, WHISPER_LANGUAGE)
 
     return jsonify({"transcript": transcript})
+
+
+@app.route("/api/click", methods=["POST"])
+def api_click() -> jsonify:
+    """Simulate a mouse click at the provided screen coordinates."""
+    data = request.get_json(force=True) or {}
+    x = data.get("x")
+    y = data.get("y")
+    if x is None or y is None:
+        return jsonify({"error": "missing coordinates"}), 400
+    pyautogui.click(x, y)
+    time.sleep(0.1)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/type", methods=["POST"])
+def api_type() -> jsonify:
+    """Type the given text using the keyboard."""
+    data = request.get_json(force=True) or {}
+    text = data.get("text", "")
+    pyautogui.write(text, interval=0.02)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/arrange", methods=["POST"])
+def api_arrange() -> jsonify:
+    """Arrange YouTube and ChatGPT windows side by side."""
+    data = request.get_json(force=True) or {}
+    yt_title = data.get("youtube_title", "YouTube")
+    gpt_title = data.get("chatgpt_title", "ChatGPT")
+
+    width, height = pyautogui.size()
+    half = width // 2
+
+    for w in gw.getWindowsWithTitle(yt_title):
+        try:
+            w.moveTo(0, 0)
+            w.resizeTo(half, height)
+            break
+        except Exception:
+            continue
+
+    for w in gw.getWindowsWithTitle(gpt_title):
+        try:
+            w.moveTo(half, 0)
+            w.resizeTo(width - half, height)
+            break
+        except Exception:
+            continue
+
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/article", methods=["POST"])
