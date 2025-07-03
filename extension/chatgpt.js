@@ -23,13 +23,18 @@ function waitFor(selector, root = document, timeout = 30000) {
   });
 }
 
-// Find the composer elements
+// Locate the editable box used for composing messages.
+// ChatGPT has switched from a <textarea> to a ProseMirror editor so we
+// support both patterns for forwards compatibility.
 async function getComposer() {
-  const textarea = await waitFor('textarea[name="prompt-textarea"]');
+  const selector = 'div[contenteditable="true"].ProseMirror, textarea[name="prompt-textarea"]';
+  const editable = document.querySelector(selector) || await waitFor(selector);
+  const isTextarea = editable.tagName.toLowerCase() === 'textarea';
   return {
-    textarea,
+    node: editable,
+    isTextarea,
     sendButton() {
-      return textarea.closest('form')?.querySelector('button[aria-label^="Send"]');
+      return editable.closest('form')?.querySelector('button[aria-label^="Send"]');
     }
   };
 }
@@ -41,23 +46,37 @@ function dispatchEnter(node) {
   node.dispatchEvent(new KeyboardEvent('keyup', evtInit));
 }
 
+// Helper to fire the sequence of events ChatGPT expects when text is inserted
+function dispatchInputLikeEvents(el) {
+  el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 // Send a prompt and resolve with assistant reply text
 async function sendPromptInternal(promptText) {
-  const { textarea, sendButton } = await getComposer();
+  const { node, isTextarea, sendButton } = await getComposer();
 
-  textarea.value = promptText;
-  textarea.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  if (isTextarea) {
+    node.value = promptText;
+    dispatchInputLikeEvents(node);
+  } else {
+    if (node.querySelector('p.is-empty')) node.innerHTML = '';
+    const p = document.createElement('p');
+    p.textContent = promptText;
+    node.appendChild(p);
+    dispatchInputLikeEvents(node);
+  }
 
   const btn = sendButton();
   if (btn) {
     btn.click();
   } else {
-    dispatchEnter(textarea);
+    dispatchEnter(node);
   }
 
-  const thread = await waitFor('#thread');
+  const thread = await waitFor('[data-message-author-role="assistant"]');
   const existingIds = new Set(
-    Array.from(thread.querySelectorAll('[data-message-author-role="assistant"]'))
+    Array.from(document.querySelectorAll('[data-message-author-role="assistant"]'))
          .map(n => n.getAttribute('data-message-id'))
   );
 
