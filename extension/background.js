@@ -114,14 +114,30 @@ function waitTabComplete(tabId) {
   });
 }
 
+// ensure ChatGPT content script has loaded
+async function ensureChatGPTReady() {
+  for (let i = 0; i < 20; i++) {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: gptTabId },
+      func: () => Boolean(window.sendPrompt)
+    });
+    if (result) return true;
+    await new Promise(r => setTimeout(r, 500));
+  }
+  return false;
+}
+
 async function openTabs() {
   cleanupTabs();
   const yt = await openPopup('https://www.youtube.com');
   ytWindowId = yt.windowId;
   ytTabId = yt.tabId;
+  await waitTabComplete(ytTabId);
   const gpt = await openPopup('https://chatgpt.com');
   gptWindowId = gpt.windowId;
   gptTabId = gpt.tabId;
+  await waitTabComplete(gptTabId);
+  await ensureChatGPTReady();
 }
 
 async function collectLinks(tabId, count) {
@@ -200,6 +216,8 @@ async function processTranscript(transcript, title) {
 }
 
 async function runChatPrompt(prompt) {
+  const ready = await ensureChatGPTReady();
+  if (!ready) throw new Error('ChatGPT not ready');
   const res = await chrome.scripting.executeScript({
     target: { tabId: gptTabId },
     func: async (p) => {
@@ -207,10 +225,7 @@ async function runChatPrompt(prompt) {
       if (window.location.pathname === '/' && maybeNewChatBtn) {
         maybeNewChatBtn.click();
       }
-      if (window.sendPrompt) {
-        return await window.sendPrompt(p);
-      }
-      return '';
+      return await window.sendPrompt(p);
     },
     args: [prompt]
   });
