@@ -11,9 +11,12 @@ A self-hosted, full-stack YouTube-to-reading pipeline with persistent sources, s
 ## One-click Windows startup
 Use `run_app.bat` and choose:
 1) bootstrap dependencies,
-4) run backend + frontend.
+4) run backend + frontend,
+6) open the detailed development plan manager.
 
 No manual command entry is required after launching the batch menu.
+
+For planning workflow on Windows, you can also run `manage_dev_plan.bat` directly.
 
 ## API Pages
 - Home

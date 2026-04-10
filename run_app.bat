@@ -10,15 +10,17 @@ echo 2. Run backend API
 echo 3. Run frontend UI
 echo 4. Run both backend and frontend
 echo 5. Run test suite
-echo 6. Exit
-set /p choice="Select option [1-6]: "
+echo 6. Open development plan manager
+echo 7. Exit
+set /p choice="Select option [1-7]: "
 
 if "%choice%"=="1" goto bootstrap
 if "%choice%"=="2" goto backend
 if "%choice%"=="3" goto frontend
 if "%choice%"=="4" goto both
 if "%choice%"=="5" goto tests
-if "%choice%"=="6" goto end
+if "%choice%"=="6" goto plan
+if "%choice%"=="7" goto end
 
 goto menu
 
@@ -48,6 +50,10 @@ goto end
 start "Backend" cmd /k "call %VENV%\Scripts\activate.bat && python %ROOT%server.py"
 start "Frontend" cmd /k "cd /d %ROOT%frontend && npm run dev"
 goto end
+
+:plan
+call "%ROOT%manage_dev_plan.bat"
+goto menu
 
 :tests
 call "%VENV%\Scripts\activate.bat"
