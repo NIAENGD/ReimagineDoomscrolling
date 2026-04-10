@@ -1,53 +1,60 @@
 @echo off
 setlocal
-set EXT_DIR=%~dp0extension
+set ROOT=%~dp0
+set VENV=%ROOT%.venv
 
 :menu
-echo ReimagineDoomscrolling Helper
+echo ReimagineDoomscrolling - Full Stack Manager
+echo 1. Bootstrap all dependencies (Python + Node)
+echo 2. Run backend API
+echo 3. Run frontend UI
+echo 4. Run both backend and frontend
+echo 5. Run test suite
+echo 6. Exit
+set /p choice="Select option [1-6]: "
 
-echo 1. Install Python requirements
-echo 2. Uninstall Python requirements
-echo 3. Start local server
-echo 4. Start server and open browser
-echo 5. Open extension folder
-echo 6. Update from GitHub
-echo 7. Exit
-set /p choice="Select option [1-7]: "
-if "%choice%"=="1" (
-    pip install -r "%~dp0requirements.txt"
-    pause
-    goto menu
-)
-if "%choice%"=="2" (
-    pip uninstall -y -r "%~dp0requirements.txt"
-    pause
-    goto menu
-)
-if "%choice%"=="3" (
-    python "%~dp0server.py" %*
-    goto end
-)
-if "%choice%"=="4" (
-    start "" http://localhost:5001
-    python "%~dp0server.py" %*
-    goto end
-)
-if "%choice%"=="5" (
-    start "" "%EXT_DIR%"
-    goto menu
-)
-if "%choice%"=="6" (
-    if exist "%~dp0\.git" (
-        git -C "%~dp0." pull
-    ) else (
-        echo Git repository not found. Please clone using git to enable updates.
-    )
-    pause
-    goto menu
-)
-if "%choice%"=="7" goto end
+if "%choice%"=="1" goto bootstrap
+if "%choice%"=="2" goto backend
+if "%choice%"=="3" goto frontend
+if "%choice%"=="4" goto both
+if "%choice%"=="5" goto tests
+if "%choice%"=="6" goto end
 
-echo Invalid option
+goto menu
+
+:bootstrap
+if not exist "%VENV%" python -m venv "%VENV%"
+call "%VENV%\Scripts\activate.bat"
+python -m pip install --upgrade pip
+pip install -r "%ROOT%requirements.txt"
+cd /d "%ROOT%frontend"
+if not exist node_modules npm install
+cd /d "%ROOT%"
+echo Bootstrap complete.
+pause
+goto menu
+
+:backend
+call "%VENV%\Scripts\activate.bat"
+python "%ROOT%server.py"
+goto end
+
+:frontend
+cd /d "%ROOT%frontend"
+npm run dev
+goto end
+
+:both
+start "Backend" cmd /k "call %VENV%\Scripts\activate.bat && python %ROOT%server.py"
+start "Frontend" cmd /k "cd /d %ROOT%frontend && npm run dev"
+goto end
+
+:tests
+call "%VENV%\Scripts\activate.bat"
+pytest backend/tests -q
+cd /d "%ROOT%frontend"
+npm test
+cd /d "%ROOT%"
 pause
 goto menu
 

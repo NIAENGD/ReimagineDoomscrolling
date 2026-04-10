@@ -1,3 +1,2 @@
 @echo off
-python "%~dp0server.py" %*
-
+python "%~dp0server.py"
