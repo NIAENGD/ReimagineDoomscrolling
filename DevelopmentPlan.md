@@ -242,32 +242,7 @@ By v1.0, the platform should reliably provide:
 
 ---
 
-## 5) Milestone Timeline (Suggested)
-
-## Milestone 1 — Foundation Hardening (1–2 weeks)
-- API schema hardening.
-- Validation/error standardization.
-- Scheduler/job visibility improvements.
-- Baseline regression tests.
-
-## Milestone 2 — Real Ingestion Path (2–3 weeks)
-- Real discovery implementation.
-- Transcript strategy implementation.
-- Fallback transcription integration.
-
-## Milestone 3 — Generation and Reader UX (2 weeks)
-- Real provider integration.
-- Prompt/mode persistence.
-- Reader controls + library enhancements.
-
-## Milestone 4 — Reliability and Release (1–2 weeks)
-- Retry/backoff completion.
-- Diagnostics/log UX finalization.
-- Performance pass + release checklist.
-
----
-
-## 6) Definition of Done (Per Feature)
+## 5) Definition of Done (Per Feature)
 
 A feature is done only when all are true:
 - Backend logic implemented with schema + validation.
@@ -279,7 +254,7 @@ A feature is done only when all are true:
 
 ---
 
-## 7) Risk Register and Mitigation
+## 6) Risk Register and Mitigation
 
 1. **Dependency/API drift risk**
    - Mitigation: verify official docs before each integration change.
@@ -292,7 +267,7 @@ A feature is done only when all are true:
 
 ---
 
-## 8) Windows-Managed Development Operations (.bat Required)
+## 7) Windows-Managed Development Operations (.bat Required)
 
 This repository should be operated primarily through batch scripts on Windows.
 
@@ -303,25 +278,3 @@ This repository should be operated primarily through batch scripts on Windows.
 ### Batch-first policy
 - New contributors should not need to memorize backend/frontend command chains.
 - Every recurring operational task should be reachable from a `.bat` menu option.
-
----
-
-## 9) Development Review Cadence
-
-Use a weekly cycle:
-- Monday: scope lock and task assignment.
-- Midweek: integration checkpoint (pipeline + UI + tests).
-- Friday: plan review using `manage_dev_plan.bat`, publish status report, update milestone burndown.
-
----
-
-## 10) Immediate Next Actions (Priority Ordered)
-
-1. Implement strict request/response schemas for all mutable API endpoints.
-2. Replace mock video discovery with real source fetch path.
-3. Implement transcript strategy matrix and fallback execution.
-4. Add provider clients and robust generation error handling.
-5. Expand frontend policy controls and reader personalization.
-6. Introduce richer retry/backoff visibility in Jobs + Logs.
-7. Increase automated test coverage to guard full lifecycle behavior.
-8. Keep all of the above executable and reviewable from Windows `.bat` workflows.
