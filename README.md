@@ -34,11 +34,9 @@ Use `run_app.bat` option 5, or run:
 - `pytest backend/tests -q`
 - `npm test` in `frontend/`
 
-## Required integrations currently left as placeholders
-- `backend/app/services/youtube.py::discover_videos`
-- `backend/app/services/transcript.py::fetch_transcript`
-- `backend/app/services/transcript.py::transcribe_audio_locally`
-- `backend/app/services/generation.py::generate_article`
-
-These functions now intentionally raise `NotImplementedError` so unfinished integrations fail fast instead of producing mock data.
+## Implemented integrations
+- `discover_videos`: YouTube channel discovery through the public Atom feed.
+- `fetch_transcript`: subtitle retrieval via `youtube-transcript-api`.
+- `transcribe_audio_locally`: local fallback with `yt-dlp` + `faster-whisper`.
+- `generate_article`: OpenAI-compatible chat completion support for OpenAI and LM Studio.
 

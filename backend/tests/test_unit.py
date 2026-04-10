@@ -22,7 +22,7 @@ def test_fallback_logic():
     assert not should_fallback_to_transcription('disable_fallback', False, True)
 
 
-def test_prompt_and_generation_placeholder():
+def test_prompt_and_generation_provider_validation():
     prompt = render_prompt('Mode={{mode}}\n{{transcript}}', 'abc', 'study')
-    with pytest.raises(NotImplementedError):
-        generate_article('abc', prompt, ProviderConfig(provider='openai', model='x'))
+    with pytest.raises(ValueError):
+        generate_article('abc', prompt, ProviderConfig(provider='unsupported-provider', model='x'))
