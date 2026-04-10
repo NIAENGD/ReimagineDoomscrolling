@@ -2,32 +2,50 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <h4>Reimagine Doomscrolling</h4>
-  <div>
-    <label>Count <input type="number" id="count" value="6" min="1" max="20" style="width:60px"></label>
-  </div>
-  <div>
-    <label>Scoring prompt<br>
-      <textarea id="scorePrompt" rows="6"></textarea>
-    </label>
-  </div>
-  <div>
-    <label>Rewrite prompt<br>
-      <textarea id="rewritePrompt" rows="4"></textarea>
-    </label>
-  </div>
-  <button id="openTabs">Step 1: Open tabs</button>
-  <button id="start">Step 2: Start</button>
-  <button id="stop">Stop</button>
-  <button id="open">Open results</button>
-  <div style="margin-top:4px"><progress id="progress" value="0" max="100"></progress></div>
-  <pre id="log"></pre>
-  <div id="status" style="display:none"></div>
-  <div id="ytStatus"></div>
-  <div id="gptStatus"></div>
+<body class="popup-body">
+  <header class="popup-header">
+    <h1>Reimagine Doomscrolling</h1>
+    <p>Turn random feed videos into scored long-form reading.</p>
+  </header>
+
+  <section class="panel compact">
+    <div class="row between">
+      <label for="count">Videos to process</label>
+      <input type="number" id="count" value="6" min="1" max="20">
+    </div>
+    <div class="row between">
+      <span>Server</span>
+      <span id="serverStatus" class="pill">Checking…</span>
+    </div>
+    <div class="row between small">
+      <span id="ytStatus"></span>
+      <span id="gptStatus"></span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <label for="scorePrompt">Scoring prompt</label>
+    <textarea id="scorePrompt" rows="8"></textarea>
+
+    <label for="rewritePrompt">Rewrite prompt</label>
+    <textarea id="rewritePrompt" rows="5"></textarea>
+  </section>
+
+  <section class="panel">
+    <div class="actions-grid">
+      <button id="openTabs">1) Open tabs</button>
+      <button id="start" class="primary">2) Start run</button>
+      <button id="stop" class="danger">Stop</button>
+      <button id="open">Open results</button>
+    </div>
+    <progress id="progress" value="0" max="100"></progress>
+    <div id="status" class="status-line">Idle</div>
+    <div id="log" class="log" aria-live="polite"></div>
+  </section>
+
   <script src="popup.js"></script>
 </body>
 </html>
