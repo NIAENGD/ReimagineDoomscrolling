@@ -107,7 +107,11 @@ def article_detail(article_id: int, db: Session = Depends(get_db)):
 @router.post('/articles/{article_id}/regenerate')
 def regenerate(article_id: int, db: Session = Depends(get_db)):
     article = db.get(Article, article_id)
+    if not article:
+        raise HTTPException(404)
     item = db.get(VideoItem, article.video_item_id)
+    if not item:
+        raise HTTPException(404, "video item not found")
     from app.services.pipeline import process_video_item
     process_video_item(db, item.id)
     return {"regenerated": True}
