@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 
 def normalize_source_url(url: str) -> str:
@@ -29,16 +29,7 @@ def evaluate_video_policy(video: dict, source) -> tuple[bool, str]:
 
 
 def discover_videos(_source) -> list[dict]:
-    now = datetime.utcnow()
-    return [
-        {
-            "video_id": f"mock-{i}",
-            "url": f"https://youtube.com/watch?v=mock-{i}",
-            "title": f"Mock Video {i}",
-            "duration": 300,
-            "published_at": now,
-            "thumbnail": "",
-            "is_live": False,
-        }
-        for i in range(1, _source.max_videos + 1)
-    ]
+    raise NotImplementedError(
+        "discover_videos is a required integration point and still a placeholder. "
+        "Implement real YouTube channel discovery before using refresh flows."
+    )

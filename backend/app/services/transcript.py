@@ -12,8 +12,14 @@ def should_fallback_to_transcription(strategy: str, transcript_found: bool, fall
 
 
 def fetch_transcript(_video_url: str, _languages: list[str]) -> tuple[str, str]:
-    return "Sample transcript text", "manual"
+    raise NotImplementedError(
+        "fetch_transcript is a required integration point and still a placeholder. "
+        "Implement transcript retrieval from your selected provider."
+    )
 
 
 def transcribe_audio_locally(_video_url: str) -> str:
-    return "Local transcription text"
+    raise NotImplementedError(
+        "transcribe_audio_locally is a required integration point and still a placeholder. "
+        "Implement local transcription wiring before enabling fallback."
+    )
