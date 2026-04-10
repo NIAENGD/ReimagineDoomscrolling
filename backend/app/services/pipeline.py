@@ -76,7 +76,7 @@ def process_video_item(db, item_id: int):
         db.add(ArticleVersion(article_id=article.id, version=version_num, mode="detailed", prompt_snapshot=prompt, body=body))
         item.status = ItemStatus.published
         db.add(Job(type="process_item", status="done", video_item_id=item.id, source_id=item.source_id))
-    except NotImplementedError as exc:
+    except Exception as exc:
         item.status = ItemStatus.failed
         item.status_message = str(exc)
         db.add(Job(type="process_item", status="failed", video_item_id=item.id, source_id=item.source_id, error=str(exc)))
