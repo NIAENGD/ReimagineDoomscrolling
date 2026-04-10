@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from app.services.generation import ProviderConfig, generate_article, render_prompt
 from app.services.transcript import should_fallback_to_transcription
 from app.services.youtube import evaluate_video_policy, normalize_source_url
@@ -20,7 +22,7 @@ def test_fallback_logic():
     assert not should_fallback_to_transcription('disable_fallback', False, True)
 
 
-def test_prompt_and_provider():
+def test_prompt_and_generation_placeholder():
     prompt = render_prompt('Mode={{mode}}\n{{transcript}}', 'abc', 'study')
-    out = generate_article('abc', prompt, ProviderConfig(provider='openai', model='x'))
-    assert 'openai:x' in out
+    with pytest.raises(NotImplementedError):
+        generate_article('abc', prompt, ProviderConfig(provider='openai', model='x'))

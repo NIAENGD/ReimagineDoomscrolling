@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
-def test_settings_source_refresh_library_flow():
+def test_settings_source_refresh_handles_placeholders_gracefully():
     with TestClient(app) as client:
         r = client.put('/api/settings', json={'provider': 'openai'})
         assert r.status_code == 200
@@ -17,12 +17,8 @@ def test_settings_source_refresh_library_flow():
 
         lib = client.get('/api/library')
         assert lib.status_code == 200
-        assert len(lib.json()) >= 1
+        assert lib.json() == []
 
-        aid = lib.json()[0]['article_id']
-        regen = client.post(f'/api/articles/{aid}/regenerate')
-        assert regen.status_code == 200
-
-        detail = client.get(f'/api/articles/{aid}')
-        assert detail.status_code == 200
-        assert len(detail.json()['versions']) >= 1
+        jobs = client.get('/api/jobs')
+        assert jobs.status_code == 200
+        assert any(job['status'] == 'failed' and job['type'] == 'refresh_source' for job in jobs.json())
