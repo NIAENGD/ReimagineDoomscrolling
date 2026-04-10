@@ -9,6 +9,13 @@ from app.services.pipeline import refresh_source
 from app.services.youtube import normalize_source_url
 
 router = APIRouter()
+DEFAULT_APP_SETTINGS = {
+    "ffmpeg_path": "",
+    "yt_dlp_path": "",
+    "openai_api_key": "",
+    "openai_base_url": "https://api.openai.com/v1",
+    "lmstudio_base_url": "http://localhost:1234/v1",
+}
 
 
 @router.get('/health')
@@ -19,7 +26,8 @@ def health():
 @router.get('/settings')
 def get_settings(db: Session = Depends(get_db)):
     rows = db.execute(select(AppSetting)).scalars().all()
-    return {r.key: r.value for r in rows}
+    saved = {r.key: r.value for r in rows}
+    return {**DEFAULT_APP_SETTINGS, **saved}
 
 
 @router.put('/settings')
@@ -134,9 +142,30 @@ def create_collection(body: dict, db: Session = Depends(get_db)):
 @router.get('/diagnostics')
 def diagnostics():
     import shutil
+    from app.db.session import SessionLocal
+
+    ffmpeg_detected = False
+    yt_dlp_detected = False
+    ffmpeg_command = "ffmpeg"
+    yt_dlp_command = "yt-dlp"
+
+    db = SessionLocal()
+    try:
+        rows = db.execute(select(AppSetting).where(AppSetting.key.in_(["ffmpeg_path", "yt_dlp_path"]))).scalars().all()
+        settings_map = {row.key: row.value.strip() for row in rows}
+        ffmpeg_command = settings_map.get("ffmpeg_path") or ffmpeg_command
+        yt_dlp_command = settings_map.get("yt_dlp_path") or yt_dlp_command
+    finally:
+        db.close()
+
+    ffmpeg_detected = bool(shutil.which(ffmpeg_command) or (ffmpeg_command and shutil.which("ffmpeg")))
+    yt_dlp_detected = bool(shutil.which(yt_dlp_command) or (yt_dlp_command and shutil.which("yt-dlp")))
+
     return {
-        'ffmpeg': bool(shutil.which('ffmpeg')),
-        'yt_dlp': bool(shutil.which('yt-dlp')),
+        'ffmpeg': ffmpeg_detected,
+        'ffmpeg_command': ffmpeg_command,
+        'yt_dlp': yt_dlp_detected,
+        'yt_dlp_command': yt_dlp_command,
         'faster_whisper': True,
         'db': True,
         'queue': True,

@@ -2,7 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import select
 
-from app.models.entities import Article, ArticleVersion, ItemStatus, Job, Source, Transcript, VideoItem
+from app.models.entities import AppSetting, Article, ArticleVersion, ItemStatus, Job, Source, Transcript, VideoItem
 from app.services.generation import ProviderConfig, generate_article, render_prompt
 from app.services.transcript import fetch_transcript, should_fallback_to_transcription, transcribe_audio_locally
 from app.services.youtube import discover_videos, evaluate_video_policy
@@ -46,7 +46,9 @@ def process_video_item(db, item_id: int):
 
         if not text and should_fallback_to_transcription("transcript_first", False, True):
             item.status = ItemStatus.transcription_started
-            text = transcribe_audio_locally(item.url)
+            yt_dlp_setting = db.execute(select(AppSetting).where(AppSetting.key == "yt_dlp_path")).scalar_one_or_none()
+            yt_dlp_command = yt_dlp_setting.value.strip() if yt_dlp_setting and yt_dlp_setting.value else "yt-dlp"
+            text = transcribe_audio_locally(item.url, yt_dlp_command=yt_dlp_command)
             source_kind = "local_transcription"
             item.status = ItemStatus.transcription_completed
         else:
