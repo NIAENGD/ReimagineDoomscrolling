@@ -53,434 +53,434 @@ Status key used below:
 
 | Task                                        | Progress | Notes |
 | ------------------------------------------- | -------- | ----- |
-| Persistent settings entity and storage      |          |       |
-| Durable sources entity with policy fields   |          |       |
-| Canonical channel identity persistence      |          |       |
-| Source refresh runs entity                  |          |       |
-| Video/item entity with dedup-safe identity  |          |       |
-| Transcript entity and metadata storage      |          |       |
-| Articles entity                             |          |       |
-| Article versions entity                     |          |       |
-| Collections entity                          |          |       |
-| Jobs entity                                 |          |       |
-| Job items entity                            |          |       |
-| Logs/events entity                          |          |       |
-| Reading progress entity                     |          |       |
-| Practical schema only, no speculative bloat |          |       |
-| Alembic migrations created                  |          |       |
-| Migrations apply cleanly                    |          |       |
+| Persistent settings entity and storage | ✅ Done | `AppSetting` model plus `/settings` GET/PUT persists key/value settings. |
+| Durable sources entity with policy fields | ✅ Done | `Source` model stores URL/state/cadence/discovery/policy fields used by refresh logic. |
+| Canonical channel identity persistence | 🟡 Partial | `channel_id` exists but canonical resolution is not actually populated in create/refresh flows. |
+| Source refresh runs entity | 🟡 Partial | `RefreshRun` model exists, but refresh pipeline does not write run rows. |
+| Video/item entity with dedup-safe identity | ✅ Done | `VideoItem` has unique `(source_id, video_id)` constraint and duplicate check in refresh. |
+| Transcript entity and metadata storage | 🟡 Partial | Transcript text/source/language stored, but richer metadata and lifecycle fields are not captured. |
+| Articles entity | ✅ Done | `Article` model exists and is created during processing. |
+| Article versions entity | ✅ Done | `ArticleVersion` rows are appended on generation/regeneration. |
+| Collections entity | ✅ Done | Collection and join models exist with CRUD endpoints. |
+| Jobs entity | ✅ Done | `Job` model is used for process/refresh success/failure tracking. |
+| Job items entity | ❌ Not done | No separate job-item table; only single `Job` records are present. |
+| Logs/events entity | ✅ Done | `LogEvent` table exists and `/logs` endpoint reads recent events. |
+| Reading progress entity | ❌ Not done | No dedicated reading-progress table or per-position persistence model. |
+| Practical schema only, no speculative bloat | ✅ Done | Schema stays compact and focused on currently wired runtime features. |
+| Alembic migrations created | ❌ Not done | Migration folder has guidance only; no concrete Alembic revision files committed. |
+| Migrations apply cleanly | 🟡 Partial | Startup uses `Base.metadata.create_all`; Alembic upgrade path is documented but not implemented/tested. |
 
 ### Source model and source policy
 
 | Task                                           | Progress | Notes |
 | ---------------------------------------------- | -------- | ----- |
-| Add YouTube channel as source                  |          |       |
-| Edit source                                    |          |       |
-| Pause source                                   |          |       |
-| Resume source                                  |          |       |
-| Archive source                                 |          |       |
-| Persist source URL                             |          |       |
-| Resolve and persist canonical channel identity |          |       |
-| Persist source title and metadata              |          |       |
-| Persist enabled/paused/archived state          |          |       |
-| Persist refresh cadence                        |          |       |
-| Persist discovery mode                         |          |       |
-| Persist max videos policy                      |          |       |
-| Persist rolling time-window policy             |          |       |
-| Persist minimum duration filter                |          |       |
-| Persist skip shorts policy                     |          |       |
-| Persist skip livestreams policy                |          |       |
-| Persist transcript strategy                    |          |       |
-| Persist transcription fallback strategy        |          |       |
-| Persist prompt/article generation preset       |          |       |
-| Persist destination collection or shelf        |          |       |
-| Persist deduplication policy                   |          |       |
-| Persist retry policy                           |          |       |
-| Support manual reprocess for selected items    |          |       |
+| Add YouTube channel as source | ✅ Done | `POST /sources` accepts YouTube URL/title and creates a source. |
+| Edit source | ✅ Done | `PATCH /sources/{id}` updates mutable fields. |
+| Pause source | ✅ Done | `state` supports `paused`; scheduler only ticks `enabled` sources. |
+| Resume source | ✅ Done | Setting state back to `enabled` resumes scheduling. |
+| Archive source | ✅ Done | `archived` state is supported and excluded from scheduler ticks. |
+| Persist source URL | ✅ Done | Normalized source URL saved in `Source.url`. |
+| Resolve and persist canonical channel identity | 🟡 Partial | Field exists but no robust channel-id resolution from handle/custom URL path. |
+| Persist source title and metadata | 🟡 Partial | Title persists, but broader channel metadata refresh is not implemented. |
+| Persist enabled/paused/archived state | ✅ Done | `Source.state` enum persisted and editable in UI/API. |
+| Persist refresh cadence | ✅ Done | `cadence_minutes` persists and scheduler uses it for `next_run_at`. |
+| Persist discovery mode | ✅ Done | `discovery_mode` field persisted and referenced in policy checks. |
+| Persist max videos policy | ✅ Done | `max_videos` persists and limits discovered feed entries. |
+| Persist rolling time-window policy | ✅ Done | `rolling_window_hours` persists and policy evaluator applies it. |
+| Persist minimum duration filter | ✅ Done | `min_duration_seconds` persists and is enforced. |
+| Persist skip shorts policy | ✅ Done | `skip_shorts` persists and is enforced. |
+| Persist skip livestreams policy | ✅ Done | `skip_livestreams` persists and is enforced. |
+| Persist transcript strategy | ✅ Done | `transcript_strategy` persists in source model. |
+| Persist transcription fallback strategy | ✅ Done | `fallback_enabled` persists in source model. |
+| Persist prompt/article generation preset | 🟡 Partial | Prompt override field exists, but generation path uses fixed template/mode. |
+| Persist destination collection or shelf | 🟡 Partial | Destination collection FK exists but not wired to assignment flow. |
+| Persist deduplication policy | ❌ Not done | Dedup behavior is fixed; no configurable dedup policy field/logic. |
+| Persist retry policy | ❌ Not done | No per-source persisted retry policy settings beyond failure counter. |
+| Support manual reprocess for selected items | ❌ Not done | Only article-level regenerate exists; no selective item reprocess UI/API. |
 
 ### Discovery and refresh pipeline
 
 | Task                                           | Progress | Notes |
 | ---------------------------------------------- | -------- | ----- |
-| Normalize and resolve source before refresh    |          |       |
-| Fetch source metadata during refresh           |          |       |
-| Discover latest N videos                       |          |       |
-| Discover all videos since last successful scan |          |       |
-| Discover videos within rolling window          |          |       |
-| Apply minimum duration filter                  |          |       |
-| Apply skip shorts filter                       |          |       |
-| Apply skip livestreams filter                  |          |       |
-| Compare discovered items against known items   |          |       |
-| Create new items only when eligible            |          |       |
-| Safely suppress duplicates                     |          |       |
-| Enqueue new eligible items for processing      |          |       |
-| Record refresh logs and status                 |          |       |
-| Force refresh / run-now action                 |          |       |
+| Normalize and resolve source before refresh | 🟡 Partial | Normalization happens on create, but refresh does not re-resolve canonical identity. |
+| Fetch source metadata during refresh | ❌ Not done | Refresh reads video feed entries only; source metadata update is absent. |
+| Discover latest N videos | ✅ Done | Feed fetch + `max_videos` cap supports latest-N discovery. |
+| Discover all videos since last successful scan | ❌ Not done | No delta-since-last-success scan implementation. |
+| Discover videos within rolling window | ✅ Done | Policy evaluator rejects items outside rolling window when mode selected. |
+| Apply minimum duration filter | ✅ Done | Duration filter logic implemented in `evaluate_video_policy`. |
+| Apply skip shorts filter | ✅ Done | Short-video filter logic implemented. |
+| Apply skip livestreams filter | ✅ Done | Livestream filter logic implemented. |
+| Compare discovered items against known items | ✅ Done | Refresh query checks for existing `(source_id, video_id)`. |
+| Create new items only when eligible | ✅ Done | Only policy-eligible unseen videos are created for processing. |
+| Safely suppress duplicates | ✅ Done | Combination of unique constraint and pre-insert existence check suppresses duplicates. |
+| Enqueue new eligible items for processing | 🟡 Partial | Items are immediately processed inline; no durable async queue stage. |
+| Record refresh logs and status | 🟡 Partial | Basic timestamps/failure_count update, but no `RefreshRun` audit log records. |
+| Force refresh / run-now action | ✅ Done | `POST /sources/{id}/refresh` triggers immediate refresh. |
 
 ### Scheduling and retry behavior
 
 | Task                               | Progress | Notes |
 | ---------------------------------- | -------- | ----- |
-| Global refresh enabled/disabled    |          |       |
-| Global default cadence             |          |       |
-| Per-source cadence override        |          |       |
-| Hourly refresh support             |          |       |
-| Next scheduled run tracking        |          |       |
-| Last successful run tracking       |          |       |
-| Missed-run handling                |          |       |
-| Backoff after repeated failure     |          |       |
-| Concurrency cap                    |          |       |
-| Retry intervals/backoff settings   |          |       |
-| Scheduler runs automatically       |          |       |
-| Scheduler status visible in UI/API |          |       |
+| Global refresh enabled/disabled | ❌ Not done | No global scheduler enable flag exposed/stored. |
+| Global default cadence | ❌ Not done | No separate global cadence setting; only per-source cadence field. |
+| Per-source cadence override | ✅ Done | Each source has its own `cadence_minutes` used by scheduler. |
+| Hourly refresh support | ✅ Done | Cadence is minute-based; 60-minute hourly operation is supported. |
+| Next scheduled run tracking | ✅ Done | Scheduler updates `next_run_at` after each run. |
+| Last successful run tracking | ✅ Done | Refresh sets `last_success_at` on successful completion. |
+| Missed-run handling | ❌ Not done | No explicit missed-run catch-up/backfill policy beyond simple due check. |
+| Backoff after repeated failure | ❌ Not done | Failure counter increments, but no adaptive backoff strategy is applied. |
+| Concurrency cap | ❌ Not done | No scheduler/worker concurrency limiter implemented. |
+| Retry intervals/backoff settings | ❌ Not done | No configurable retry interval/backoff engine for failed items/jobs. |
+| Scheduler runs automatically | ✅ Done | Backend startup calls scheduler bootstrap and background tick job. |
+| Scheduler status visible in UI/API | ❌ Not done | No dedicated scheduler status endpoint/UI card sourced from runtime scheduler state. |
 
 ### Item lifecycle and processing states
 
 | Task                                  | Progress | Notes |
 | ------------------------------------- | -------- | ----- |
-| Persist discovered state              |          |       |
-| Persist filtered_out state            |          |       |
-| Persist queued state                  |          |       |
-| Persist metadata_fetched state        |          |       |
-| Persist transcript_searching state    |          |       |
-| Persist transcript_found state        |          |       |
-| Persist transcript_unavailable state  |          |       |
-| Persist audio_downloaded state        |          |       |
-| Persist transcription_started state   |          |       |
-| Persist transcription_completed state |          |       |
-| Persist generation_started state      |          |       |
-| Persist generation_completed state    |          |       |
-| Persist published state               |          |       |
-| Persist failed state                  |          |       |
-| Persist retry_pending state           |          |       |
-| Persist skipped_duplicate state       |          |       |
-| Persist skipped_by_policy state       |          |       |
-| All transitions visible in API        |          |       |
-| All transitions visible in UI         |          |       |
+| Persist discovered state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist filtered_out state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist queued state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist metadata_fetched state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist transcript_searching state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist transcript_found state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist transcript_unavailable state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist audio_downloaded state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist transcription_started state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist transcription_completed state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist generation_started state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist generation_completed state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist published state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist failed state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist retry_pending state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist skipped_duplicate state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| Persist skipped_by_policy state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
+| All transitions visible in API | 🟡 Partial | Item status exists in DB but there is no dedicated item status/timeline endpoint. |
+| All transitions visible in UI | ❌ Not done | UI does not show per-item lifecycle timeline or full status transitions. |
 
 ### Transcript retrieval and fallback transcription
 
 | Task                                                 | Progress | Notes |
 | ---------------------------------------------------- | -------- | ----- |
-| Manual transcript only strategy                      |          |       |
-| Prefer manual then auto transcript strategy          |          |       |
-| Allow auto transcript strategy                       |          |       |
-| Force local transcription strategy                   |          |       |
-| Transcript-first then audio fallback strategy        |          |       |
-| Disable fallback strategy                            |          |       |
-| Preferred transcript languages                       |          |       |
-| Retrieve transcript when available                   |          |       |
-| Download audio when fallback is needed               |          |       |
-| Normalize extracted audio as needed                  |          |       |
-| Run Faster-Whisper on CPU                            |          |       |
-| Persist transcript text                              |          |       |
-| Persist transcription metadata                       |          |       |
-| Delete downloaded audio after success by default     |          |       |
-| Retain failed-job audio only when explicitly enabled |          |       |
-| Retry transcript/transcription failures              |          |       |
+| Manual transcript only strategy | ❌ Not done | No strict manual-only selector; transcript fetch uses library defaults. |
+| Prefer manual then auto transcript strategy | ❌ Not done | Strategy granularity is not implemented in transcript retrieval call. |
+| Allow auto transcript strategy | ❌ Not done | No explicit auto-only strategy selection path. |
+| Force local transcription strategy | 🟡 Partial | Fallback helper supports it, but pipeline currently passes hard-coded strategy values. |
+| Transcript-first then audio fallback strategy | 🟡 Partial | Flow is transcript-first with fallback, but source-specific strategy is not wired through. |
+| Disable fallback strategy | 🟡 Partial | Helper supports disable, but pipeline hard-codes fallback enabled. |
+| Preferred transcript languages | ❌ Not done | Pipeline always requests `["en"]`; no persisted language preference wiring. |
+| Retrieve transcript when available | ✅ Done | `fetch_transcript` retrieves YouTube transcript text. |
+| Download audio when fallback is needed | ✅ Done | Fallback path downloads audio via `yt-dlp`. |
+| Normalize extracted audio as needed | ❌ Not done | No explicit audio normalization/transcoding pipeline beyond `yt-dlp -x`. |
+| Run Faster-Whisper on CPU | ✅ Done | Local transcription uses Faster-Whisper with CPU/int8 settings. |
+| Persist transcript text | ✅ Done | Transcript text is inserted/updated in `transcripts` table. |
+| Persist transcription metadata | 🟡 Partial | Only source/language fields exist; detailed timing/model metadata absent. |
+| Delete downloaded audio after success by default | ✅ Done | Temp directory cleanup removes downloaded audio on function exit. |
+| Retain failed-job audio only when explicitly enabled | ❌ Not done | No retained-failed-audio toggle or retention branch exists. |
+| Retry transcript/transcription failures | ❌ Not done | No stage-level automatic retry orchestration for transcript/transcribe failures. |
 
 ### Article generation and provider abstraction
 
 | Task                                                        | Progress | Notes |
 | ----------------------------------------------------------- | -------- | ----- |
-| Provider abstraction implemented                            |          |       |
-| OpenAI provider support                                     |          |       |
-| LM Studio OpenAI-compatible provider support                |          |       |
-| Persistent provider selection                               |          |       |
-| Persistent model name                                       |          |       |
-| Persistent API key or base URL                              |          |       |
-| Persistent timeout                                          |          |       |
-| Persistent temperature                                      |          |       |
-| Persistent max tokens                                       |          |       |
-| Persistent article mode                                     |          |       |
-| Persistent global prompt template                           |          |       |
-| Optional per-source prompt override                         |          |       |
-| Prompt preview / resolved prompt inspection                 |          |       |
-| Test prompt against sample transcript                       |          |       |
-| Store prompt snapshot on every generated article version    |          |       |
-| Concise article mode                                        |          |       |
-| Detailed article mode                                       |          |       |
-| Study notes mode                                            |          |       |
-| Executive brief mode                                        |          |       |
-| Tutorial reconstruction mode                                |          |       |
-| Regenerate article creates new version, not overwrite       |          |       |
-| Generation avoids unsupported invention as much as feasible |          |       |
+| Provider abstraction implemented | ✅ Done | `ProviderConfig` + provider switch dispatch implemented. |
+| OpenAI provider support | ✅ Done | OpenAI-compatible chat completion call implemented. |
+| LM Studio OpenAI-compatible provider support | ✅ Done | LM Studio base URL path supported in provider switch. |
+| Persistent provider selection | 🟡 Partial | Settings can store provider-like keys, but generation path is currently hard-coded to OpenAI provider. |
+| Persistent model name | ❌ Not done | Model selection is hard-coded in pipeline, not persisted/loaded. |
+| Persistent API key or base URL | 🟡 Partial | Settings endpoints persist base URLs/key fields, but key is env-driven at runtime in generator. |
+| Persistent timeout | ❌ Not done | HTTP timeout is hard-coded; no persisted timeout wiring. |
+| Persistent temperature | ❌ Not done | Temperature defaults in config object; not persisted/wired from settings. |
+| Persistent max tokens | ❌ Not done | No max-token setting passed to chat completion payload. |
+| Persistent article mode | ❌ Not done | Mode is hard-coded to `detailed` in pipeline. |
+| Persistent global prompt template | ❌ Not done | Pipeline uses inline literal template; no stored global template usage. |
+| Optional per-source prompt override | 🟡 Partial | Source has `prompt_override`, but pipeline does not apply it yet. |
+| Prompt preview / resolved prompt inspection | ❌ Not done | No API/UI for previewing resolved prompt before generation. |
+| Test prompt against sample transcript | ❌ Not done | No prompt-test endpoint/tooling in backend or UI. |
+| Store prompt snapshot on every generated article version | ✅ Done | Each version row stores `prompt_snapshot`. |
+| Concise article mode | ❌ Not done | No specialized concise mode workflow. |
+| Detailed article mode | 🟡 Partial | Current output effectively detailed, but no mode switching UX/settings. |
+| Study notes mode | ❌ Not done | No study-notes mode option is implemented. |
+| Executive brief mode | ❌ Not done | No executive-brief mode option is implemented. |
+| Tutorial reconstruction mode | ❌ Not done | No tutorial-reconstruction mode option is implemented. |
+| Regenerate article creates new version, not overwrite | ✅ Done | Regeneration increments `latest_version` and inserts new version row. |
+| Generation avoids unsupported invention as much as feasible | 🟡 Partial | System prompt nudges behavior, but no citation/grounding guardrails are implemented. |
 
 ### Library, reader, and reading experience
 
 | Task                                   | Progress | Notes |
 | -------------------------------------- | -------- | ----- |
-| Articles appear in library             |          |       |
-| Bookshelf/grid/list views              |          |       |
-| Grouping by source                     |          |       |
-| Unread filters                         |          |       |
-| Search by title                        |          |       |
-| Search by body                         |          |       |
-| Search by source                       |          |       |
-| Sort by import time                    |          |       |
-| Sort by publish time                   |          |       |
-| Sort by source                         |          |       |
-| Sort by title                          |          |       |
-| YouTube thumbnails displayed           |          |       |
-| Preview snippets                       |          |       |
-| Transcript source badges               |          |       |
-| Polished reader page                   |          |       |
-| Clean typography                       |          |       |
-| Light theme                            |          |       |
-| Dark theme                             |          |       |
-| Sepia theme                            |          |       |
-| Serif font mode                        |          |       |
-| Sans font mode                         |          |       |
-| Adjustable font size                   |          |       |
-| Adjustable line width                  |          |       |
-| Estimated reading time                 |          |       |
-| Heading navigation                     |          |       |
-| Source metadata in reader              |          |       |
-| Transcript tab or panel                |          |       |
-| Article version switcher               |          |       |
-| Mark as read                           |          |       |
-| Mark as unread                         |          |       |
-| Export action                          |          |       |
-| Copy action                            |          |       |
-| Related source articles if implemented |          |       |
-| Reading progress persistence           |          |       |
+| Articles appear in library | ✅ Done | Library endpoint/UI lists generated articles with previews. |
+| Bookshelf/grid/list views | 🟡 Partial | Grid card view exists; alternate list/bookshelf modes are absent. |
+| Grouping by source | ❌ Not done | Library API/UI does not group results by source. |
+| Unread filters | ❌ Not done | Unread/read filtering controls are not implemented. |
+| Search by title | ✅ Done | Library search filters by video title. |
+| Search by body | ❌ Not done | Body-content search is not implemented. |
+| Search by source | ❌ Not done | Search currently ignores source metadata. |
+| Sort by import time | ❌ Not done | No sort controls; default DB order only. |
+| Sort by publish time | ❌ Not done | No publish-time sorting controls implemented. |
+| Sort by source | ❌ Not done | No source sorting controls implemented. |
+| Sort by title | ❌ Not done | No explicit title sorting controls implemented. |
+| YouTube thumbnails displayed | ❌ Not done | Library cards do not render thumbnails. |
+| Preview snippets | ✅ Done | Library payload includes body preview snippet. |
+| Transcript source badges | ❌ Not done | UI does not display transcript source badges. |
+| Polished reader page | 🟡 Partial | Reader page exists with version switch/regenerate but limited reading UX features. |
+| Clean typography | ✅ Done | Custom CSS provides readable typography and spacing baseline. |
+| Light theme | ❌ Not done | Only dark-themed styling is implemented. |
+| Dark theme | ✅ Done | Dark theme is the shipped default. |
+| Sepia theme | ❌ Not done | No sepia theme option exists. |
+| Serif font mode | ❌ Not done | No serif toggle in reader settings/UI. |
+| Sans font mode | ✅ Done | Default sans stack is used globally. |
+| Adjustable font size | ❌ Not done | No UI control for dynamic reader font size. |
+| Adjustable line width | ❌ Not done | No UI control for reader line width. |
+| Estimated reading time | ❌ Not done | Reader does not compute/show reading-time estimates. |
+| Heading navigation | ❌ Not done | No parsed heading outline or jump navigation in reader. |
+| Source metadata in reader | ❌ Not done | Reader displays title/content only, not source/channel metadata. |
+| Transcript tab or panel | ❌ Not done | Reader has no transcript panel/tab view. |
+| Article version switcher | ✅ Done | Reader has version dropdown bound to available versions. |
+| Mark as read | ❌ Not done | No mark-read action in API/UI despite `is_read` field. |
+| Mark as unread | ❌ Not done | No mark-unread action in API/UI. |
+| Export action | ❌ Not done | No export endpoint/control in reader/library. |
+| Copy action | ❌ Not done | No dedicated copy-to-clipboard action in reader UI. |
+| Related source articles if implemented | ❌ Not done | No related-article recommendations are generated/rendered. |
+| Reading progress persistence | ❌ Not done | No persisted scroll/progress tracking implemented. |
 
 ### Collections
 
 | Task                           | Progress | Notes |
 | ------------------------------ | -------- | ----- |
-| Create collection              |          |       |
-| Edit collection                |          |       |
-| Delete collection              |          |       |
-| Collection detail page         |          |       |
-| Add article to collection      |          |       |
-| Remove article from collection |          |       |
-| Filter library by collection   |          |       |
+| Create collection | ✅ Done | Collections can be created via API and UI. |
+| Edit collection | ❌ Not done | No collection rename/update endpoint or UI. |
+| Delete collection | ❌ Not done | No delete endpoint or UI action for collections. |
+| Collection detail page | ❌ Not done | No route/page for single collection detail. |
+| Add article to collection | ❌ Not done | No API/UI for assigning articles to collections. |
+| Remove article from collection | ❌ Not done | No API/UI for unassigning articles from collections. |
+| Filter library by collection | ❌ Not done | Library filter controls do not include collections. |
 
 ### Pages and frontend coverage
 
 | Task                                  | Progress | Notes |
 | ------------------------------------- | -------- | ----- |
-| Home page functional                  |          |       |
-| Home shows continue reading           |          |       |
-| Home shows latest articles            |          |       |
-| Home shows unread count               |          |       |
-| Home shows active sources             |          |       |
-| Home shows recent jobs                |          |       |
-| Home shows failed items               |          |       |
-| Home shows scheduler status           |          |       |
-| Sources page functional               |          |       |
-| Source Detail page functional         |          |       |
-| Jobs page functional                  |          |       |
-| Library page functional               |          |       |
-| Collections page functional           |          |       |
-| Article Reader page functional        |          |       |
-| Settings page functional              |          |       |
-| Diagnostics page functional           |          |       |
-| Logs page functional                  |          |       |
-| No primary page is a dead placeholder |          |       |
-| Multi-page frontend implemented       |          |       |
+| Home page functional | ✅ Done | Dashboard route renders stats and recent articles. |
+| Home shows continue reading | ❌ Not done | No continue-reading module/state exists. |
+| Home shows latest articles | ✅ Done | Home lists recent articles with links to reader. |
+| Home shows unread count | ❌ Not done | Unread count is not computed/rendered. |
+| Home shows active sources | ❌ Not done | Home only shows total sources, not explicit active-sources widget. |
+| Home shows recent jobs | ❌ Not done | No job list section; only aggregated job counters. |
+| Home shows failed items | 🟡 Partial | Failed job count card exists, but not failed item drill-down. |
+| Home shows scheduler status | ❌ Not done | Scheduler state is not shown on home UI. |
+| Sources page functional | ✅ Done | Sources page supports add/list/edit and refresh actions. |
+| Source Detail page functional | ❌ Not done | No dedicated source-detail route/page exists. |
+| Jobs page functional | ✅ Done | Jobs table route with retry action is implemented. |
+| Library page functional | ✅ Done | Library route lists and searches articles. |
+| Collections page functional | ✅ Done | Collections route lists and creates collections. |
+| Article Reader page functional | ✅ Done | Reader route loads article versions and allows regeneration. |
+| Settings page functional | ✅ Done | Settings route loads/edits persisted settings keys. |
+| Diagnostics page functional | ✅ Done | Diagnostics route shows backend diagnostic key-values. |
+| Logs page functional | ✅ Done | Logs route renders recent log rows from API. |
+| No primary page is a dead placeholder | ✅ Done | Primary nav routes render working UI components, not blank placeholders. |
+| Multi-page frontend implemented | ✅ Done | React Router includes multiple routed pages and sidebar navigation. |
 
 ### Settings coverage
 
 | Task                                                | Progress | Notes |
 | --------------------------------------------------- | -------- | ----- |
-| General: timezone                                   |          |       |
-| General: UI theme default                           |          |       |
-| Sources: default discovery mode                     |          |       |
-| Sources: default video cap                          |          |       |
-| Sources: rolling time window                        |          |       |
-| Sources: skip shorts default                        |          |       |
-| Sources: minimum duration default                   |          |       |
-| Sources: duplicate handling                         |          |       |
-| Transcript: preferred languages                     |          |       |
-| Transcript: transcript-first toggle                 |          |       |
-| Transcript: fallback enabled toggle                 |          |       |
-| Transcript: Faster-Whisper model size               |          |       |
-| Transcript: CPU threads                             |          |       |
-| Transcript: optional language hint                  |          |       |
-| Transcript: delete audio after success default true |          |       |
-| Transcript: retain failed audio only optional       |          |       |
-| Generation: local and cloud provider                |          |       |
-| Generation: model                                   |          |       |
-| Generation: API key or base URL                     |          |       |
-| Generation: timeout                                 |          |       |
-| Generation: temperature                             |          |       |
-| Generation: max tokens                              |          |       |
-| Generation: article mode default                    |          |       |
-| Generation: global prompt template                  |          |       |
-| Generation: per-source override allowed             |          |       |
-| Reader: default theme                               |          |       |
-| Reader: font family                                 |          |       |
-| Reader: font size                                   |          |       |
-| Reader: line width                                  |          |       |
-| Scheduling: global refresh enabled                  |          |       |
-| Scheduling: default cadence                         |          |       |
-| Scheduling: concurrency cap                         |          |       |
-| Scheduling: retry intervals/backoff                 |          |       |
-| Storage: temp cleanup TTL                           |          |       |
-| Storage: transcript retention policy                |          |       |
-| Storage: thumbnail cache policy                     |          |       |
-| Storage: log retention                              |          |       |
-| Advanced: debug logging                             |          |       |
-| Advanced: test provider connection                  |          |       |
-| Advanced: test transcription pipeline               |          |       |
-| Settings persistence works end to end               |          |       |
+| General: timezone | ❌ Not done | No timezone setting field or runtime usage was found. |
+| General: UI theme default | ❌ Not done | No persisted global UI theme-default setting flow exists. |
+| Sources: default discovery mode | ❌ Not done | No global default discovery-mode setting is persisted/applied. |
+| Sources: default video cap | ❌ Not done | No global default max-video cap setting is wired. |
+| Sources: rolling time window | 🟡 Partial | Per-source rolling window exists, but no global settings-page control exists. |
+| Sources: skip shorts default | ❌ Not done | No global skip-shorts default setting is wired. |
+| Sources: minimum duration default | ❌ Not done | No global minimum-duration default setting is wired. |
+| Sources: duplicate handling | ❌ Not done | No configurable duplicate-handling setting exists. |
+| Transcript: preferred languages | ❌ Not done | No transcript language preference setting is consumed by processing. |
+| Transcript: transcript-first toggle | ❌ Not done | No toggle wiring for transcript-first behavior in settings/runtime. |
+| Transcript: fallback enabled toggle | ❌ Not done | No global settings toggle currently controls fallback behavior in pipeline. |
+| Transcript: Faster-Whisper model size | ❌ Not done | Whisper model is hard-coded to `base`. |
+| Transcript: CPU threads | ❌ Not done | No setting exists for transcription CPU thread count. |
+| Transcript: optional language hint | ❌ Not done | No language-hint setting is passed to transcription/transcript services. |
+| Transcript: delete audio after success default true | 🟡 Partial | Audio is deleted via temp-dir cleanup, but no explicit setting controls this behavior. |
+| Transcript: retain failed audio only optional | ❌ Not done | No optional failed-audio-retention setting/logic exists. |
+| Generation: local and cloud provider | 🟡 Partial | Both provider code paths exist, but runtime selection is not fully wired from settings. |
+| Generation: model | ❌ Not done | No persisted model selection is consumed by generation pipeline. |
+| Generation: API key or base URL | 🟡 Partial | Settings store key/base URLs, but generator still relies on environment for API key. |
+| Generation: timeout | ❌ Not done | No persisted timeout parameter is wired to generation calls. |
+| Generation: temperature | ❌ Not done | No persisted temperature setting is wired to generation calls. |
+| Generation: max tokens | ❌ Not done | No max-token setting is persisted or sent to provider payload. |
+| Generation: article mode default | ❌ Not done | Generation mode is fixed, with no configurable default. |
+| Generation: global prompt template | ❌ Not done | No persisted global prompt template is used during generation. |
+| Generation: per-source override allowed | 🟡 Partial | Per-source override field exists, but generation pipeline does not consume it. |
+| Reader: default theme | ❌ Not done | No persisted reader theme default setting exists. |
+| Reader: font family | ❌ Not done | No reader setting control for font family. |
+| Reader: font size | ❌ Not done | No reader setting control for font size. |
+| Reader: line width | ❌ Not done | No reader setting control for line width. |
+| Scheduling: global refresh enabled | ❌ Not done | No global scheduler enable/disable setting is implemented. |
+| Scheduling: default cadence | ❌ Not done | No global default cadence setting is implemented. |
+| Scheduling: concurrency cap | ❌ Not done | No configurable concurrency-cap setting is implemented. |
+| Scheduling: retry intervals/backoff | ❌ Not done | No configurable retry interval/backoff settings are implemented. |
+| Storage: temp cleanup TTL | ❌ Not done | No temp-file cleanup TTL setting/policy enforcement exists. |
+| Storage: transcript retention policy | ❌ Not done | No transcript retention setting/policy enforcement exists. |
+| Storage: thumbnail cache policy | ❌ Not done | No thumbnail cache setting/policy enforcement exists. |
+| Storage: log retention | ❌ Not done | No log-retention setting/policy enforcement exists. |
+| Advanced: debug logging | ❌ Not done | No advanced debug-logging setting is wired. |
+| Advanced: test provider connection | ❌ Not done | No test-provider-connection action is available in settings. |
+| Advanced: test transcription pipeline | ❌ Not done | No test-transcription action is available in settings. |
+| Settings persistence works end to end | 🟡 Partial | Generic settings storage works, but most roadmap-specific setting families are not yet consumed by runtime logic. |
 
 ### API surface
 
 | Task                           | Progress | Notes |
 | ------------------------------ | -------- | ----- |
-| Settings CRUD API              |          |       |
-| Source CRUD API                |          |       |
-| Source action APIs             |          |       |
-| Source refresh trigger API     |          |       |
-| Jobs list API                  |          |       |
-| Jobs detail API                |          |       |
-| Jobs retry API                 |          |       |
-| Jobs cancel API                |          |       |
-| Item detail API                |          |       |
-| Transcript detail API          |          |       |
-| Transcript retry API           |          |       |
-| Article list API               |          |       |
-| Article detail API             |          |       |
-| Article regenerate API         |          |       |
-| Article export API             |          |       |
-| Collections CRUD API           |          |       |
-| Diagnostics API                |          |       |
-| Logs API                       |          |       |
-| Health endpoints               |          |       |
-| Typed request/response schemas |          |       |
+| Settings CRUD API | 🟡 Partial | GET/PUT exist, but no typed/sectioned settings schema or delete semantics. |
+| Source CRUD API | 🟡 Partial | Create/list/patch exist; delete missing and validation is minimal. |
+| Source action APIs | 🟡 Partial | Refresh action exists; explicit pause/resume/archive dedicated endpoints absent. |
+| Source refresh trigger API | ✅ Done | Run-now source refresh endpoint is implemented. |
+| Jobs list API | ✅ Done | `GET /jobs` returns recent jobs. |
+| Jobs detail API | ❌ Not done | No `/jobs/{id}` detail endpoint. |
+| Jobs retry API | ✅ Done | `POST /jobs/{id}/retry` marks retry pending. |
+| Jobs cancel API | ❌ Not done | No job cancel endpoint exists. |
+| Item detail API | ❌ Not done | No dedicated `/items/{id}` API route. |
+| Transcript detail API | ❌ Not done | No transcript detail endpoint exists. |
+| Transcript retry API | ❌ Not done | No transcript retry endpoint exists. |
+| Article list API | ✅ Done | `GET /library` functions as article listing API. |
+| Article detail API | ✅ Done | `GET /articles/{id}` returns article + versions. |
+| Article regenerate API | ✅ Done | `POST /articles/{id}/regenerate` triggers new version generation. |
+| Article export API | ❌ Not done | No article export endpoint exists. |
+| Collections CRUD API | 🟡 Partial | Collection list/create exist; update/delete missing. |
+| Diagnostics API | ✅ Done | `GET /diagnostics` returns runtime checks. |
+| Logs API | ✅ Done | `GET /logs` returns recent structured log rows. |
+| Health endpoints | ✅ Done | `GET /health` endpoint returns OK. |
+| Typed request/response schemas | 🟡 Partial | Source create/out schemas exist; many endpoints still use untyped dict payloads. |
 
 ### Diagnostics, logs, and operational visibility
 
 | Task                                    | Progress | Notes |
 | --------------------------------------- | -------- | ----- |
-| DB connectivity diagnostic              |          |       |
-| Queue/scheduler health diagnostic       |          |       |
-| Storage writability diagnostic          |          |       |
-| FFmpeg availability diagnostic          |          |       |
-| yt-dlp availability/version diagnostic  |          |       |
-| Transcript dependency health diagnostic |          |       |
-| Faster-Whisper availability diagnostic  |          |       |
-| OpenAI connectivity diagnostic          |          |       |
-| LM Studio connectivity diagnostic       |          |       |
-| Structured logging implemented          |          |       |
-| Log filtering                           |          |       |
-| Log searching                           |          |       |
-| Log severity filtering                  |          |       |
-| Linked log context                      |          |       |
-| Secret redaction in logs                |          |       |
+| DB connectivity diagnostic | ✅ Done | Diagnostics endpoint reports DB health flag. |
+| Queue/scheduler health diagnostic | 🟡 Partial | Diagnostics returns static `queue: true` without real scheduler/queue probing. |
+| Storage writability diagnostic | ❌ Not done | No file-system writability check is performed. |
+| FFmpeg availability diagnostic | ✅ Done | Diagnostics checks FFmpeg availability via `shutil.which`. |
+| yt-dlp availability/version diagnostic | 🟡 Partial | Presence is checked, but version info is not reported. |
+| Transcript dependency health diagnostic | ❌ Not done | No explicit `youtube_transcript_api` runtime diagnostic check. |
+| Faster-Whisper availability diagnostic | 🟡 Partial | Endpoint returns static true rather than probing model/runtime availability. |
+| OpenAI connectivity diagnostic | ❌ Not done | No active OpenAI connectivity test in diagnostics. |
+| LM Studio connectivity diagnostic | ❌ Not done | No LM Studio connectivity probe in diagnostics. |
+| Structured logging implemented | 🟡 Partial | `LogEvent` structure exists, but consistent structured emission pipeline is minimal. |
+| Log filtering | ❌ Not done | Logs endpoint has no filter/query parameters. |
+| Log searching | ❌ Not done | No search capability over log message/context. |
+| Log severity filtering | ❌ Not done | No severity-filter query on `/logs`. |
+| Linked log context | 🟡 Partial | Context field exists, but linkage to entity IDs/traces is limited. |
+| Secret redaction in logs | ❌ Not done | No explicit redaction layer observed in log-writing/serialization paths. |
 
 ### Cleanup, reliability, and operational rules
 
 | Task                                                           | Progress | Notes |
 | -------------------------------------------------------------- | -------- | ----- |
-| Strong idempotency on repeated refreshes                       |          |       |
-| Repeated refreshes do not create uncontrolled duplicates       |          |       |
-| Failure isolation per video/item                               |          |       |
-| Failed items are retryable                                     |          |       |
-| Replayability of failed items                                  |          |       |
-| Article versioning instead of silent overwrite                 |          |       |
-| Temporary audio deleted after successful processing by default |          |       |
-| Optional failed-audio retention policy                         |          |       |
-| Temp cleanup TTL enforcement                                   |          |       |
-| Transcript retention policy enforcement                        |          |       |
-| Thumbnail cache policy enforcement                             |          |       |
-| Log retention enforcement                                      |          |       |
-| API keys never exposed in frontend payloads                    |          |       |
-| Long-running work moved off request thread                     |          |       |
+| Strong idempotency on repeated refreshes | 🟡 Partial | Duplicate video insertions are prevented, but refresh run/job side effects are not fully idempotency-managed. |
+| Repeated refreshes do not create uncontrolled duplicates | ✅ Done | Unique constraint + duplicate checks avoid duplicate items for same source/video. |
+| Failure isolation per video/item | ✅ Done | Processing exceptions mark only the item as failed and continue per-item handling. |
+| Failed items are retryable | 🟡 Partial | Job status can be toggled to retry pending, but full automatic replay executor is limited. |
+| Replayability of failed items | 🟡 Partial | Manual retries can be requested, but no robust replay pipeline/state machine is present. |
+| Article versioning instead of silent overwrite | ✅ Done | Regeneration appends version rows and increments latest version. |
+| Temporary audio deleted after successful processing by default | ✅ Done | Temporary transcription directory is auto-cleaned after processing. |
+| Optional failed-audio retention policy | ❌ Not done | No failed-audio retention toggle/path exists. |
+| Temp cleanup TTL enforcement | ❌ Not done | No scheduled TTL cleanup worker for temp files. |
+| Transcript retention policy enforcement | ❌ Not done | No transcript pruning/retention policy logic exists. |
+| Thumbnail cache policy enforcement | ❌ Not done | No thumbnail caching layer to enforce policy against. |
+| Log retention enforcement | ❌ Not done | No log retention cleanup job implemented. |
+| API keys never exposed in frontend payloads | ❌ Not done | `GET /settings` returns raw key values including `openai_api_key`. |
+| Long-running work moved off request thread | ❌ Not done | Refresh/process runs synchronously in request path. |
 
 ### Testing
 
 | Task                                                | Progress | Notes |
 | --------------------------------------------------- | -------- | ----- |
-| Unit: source URL normalization                      |          |       |
-| Unit: source policy evaluation                      |          |       |
-| Unit: deduplication                                 |          |       |
-| Unit: transcript selection                          |          |       |
-| Unit: fallback decision logic                       |          |       |
-| Unit: prompt rendering                              |          |       |
-| Unit: provider abstraction                          |          |       |
-| Unit: cleanup policy                                |          |       |
-| Unit: status transitions                            |          |       |
-| Unit: schedule calculation                          |          |       |
-| Unit: article preview extraction                    |          |       |
-| Integration: create settings                        |          |       |
-| Integration: update settings                        |          |       |
-| Integration: add source                             |          |       |
-| Integration: run refresh                            |          |       |
-| Integration: discover videos                        |          |       |
-| Integration: transcript success path                |          |       |
-| Integration: transcript failure plus audio fallback |          |       |
-| Integration: successful article generation          |          |       |
-| Integration: article regeneration versioning        |          |       |
-| Integration: duplicate suppression                  |          |       |
-| Integration: audio cleanup after success            |          |       |
-| Integration: retry failed item                      |          |       |
-| Integration: diagnostics behavior                   |          |       |
-| E2E: save settings                                  |          |       |
-| E2E: add source                                     |          |       |
-| E2E: force refresh                                  |          |       |
-| E2E: observe job progress                           |          |       |
-| E2E: open library                                   |          |       |
-| E2E: read article                                   |          |       |
-| E2E: switch reader settings                         |          |       |
-| E2E: view transcript                                |          |       |
-| E2E: view diagnostics                               |          |       |
-| E2E: regenerate article version                     |          |       |
-| Failure-path: invalid source URL                    |          |       |
-| Failure-path: transcript unavailable                |          |       |
-| Failure-path: yt-dlp failure                        |          |       |
-| Failure-path: ffmpeg unavailable                    |          |       |
-| Failure-path: transcription failure                 |          |       |
-| Failure-path: OpenAI auth failure                   |          |       |
-| Failure-path: LM Studio connection failure          |          |       |
-| Failure-path: malformed model response              |          |       |
-| Failure-path: duplicate refresh request             |          |       |
-| Mocks/fakes for OpenAI                              |          |       |
-| Mocks/fakes for LM Studio                           |          |       |
-| Mocks/fakes for transcript package calls            |          |       |
-| Mocks/fakes for yt-dlp                              |          |       |
-| Mocks/fakes for Faster-Whisper                      |          |       |
-| Mocks/fakes for YouTube metadata/discovery          |          |       |
+| Unit: source URL normalization | ✅ Done | Covered in `backend/tests/test_unit.py`. |
+| Unit: source policy evaluation | ✅ Done | Covered in `backend/tests/test_unit.py`. |
+| Unit: deduplication | ❌ Not done | No explicit unit test case found for this scenario. |
+| Unit: transcript selection | ❌ Not done | No explicit unit test case found for this scenario. |
+| Unit: fallback decision logic | ✅ Done | Covered in `backend/tests/test_unit.py`. |
+| Unit: prompt rendering | ✅ Done | Covered in `backend/tests/test_unit.py`. |
+| Unit: provider abstraction | ✅ Done | Unsupported provider validation covered in unit tests. |
+| Unit: cleanup policy | ❌ Not done | No explicit unit test case found for this scenario. |
+| Unit: status transitions | ❌ Not done | No explicit unit test case found for this scenario. |
+| Unit: schedule calculation | ❌ Not done | No explicit unit test case found for this scenario. |
+| Unit: article preview extraction | ❌ Not done | No explicit unit test case found for this scenario. |
+| Integration: create settings | ✅ Done | Integration test writes settings via API. |
+| Integration: update settings | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: add source | ✅ Done | Integration test creates source via API. |
+| Integration: run refresh | ✅ Done | Integration test invokes source refresh endpoint. |
+| Integration: discover videos | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: transcript success path | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: transcript failure plus audio fallback | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: successful article generation | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: article regeneration versioning | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: duplicate suppression | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: audio cleanup after success | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: retry failed item | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: diagnostics behavior | ❌ Not done | No explicit integration test case found for this scenario. |
+| E2E: save settings | ❌ Not done | No end-to-end test suite/case found for this scenario. |
+| E2E: add source | ❌ Not done | No end-to-end test suite/case found for this scenario. |
+| E2E: force refresh | ❌ Not done | No end-to-end test suite/case found for this scenario. |
+| E2E: observe job progress | ❌ Not done | No end-to-end test suite/case found for this scenario. |
+| E2E: open library | ❌ Not done | No end-to-end test suite/case found for this scenario. |
+| E2E: read article | ❌ Not done | No end-to-end test suite/case found for this scenario. |
+| E2E: switch reader settings | ❌ Not done | No end-to-end test suite/case found for this scenario. |
+| E2E: view transcript | ❌ Not done | No end-to-end test suite/case found for this scenario. |
+| E2E: view diagnostics | ❌ Not done | No end-to-end test suite/case found for this scenario. |
+| E2E: regenerate article version | ❌ Not done | No end-to-end test suite/case found for this scenario. |
+| Failure-path: invalid source URL | ❌ Not done | No dedicated failure-path automated test for this case was found. |
+| Failure-path: transcript unavailable | ❌ Not done | No dedicated failure-path automated test for this case was found. |
+| Failure-path: yt-dlp failure | ❌ Not done | No dedicated failure-path automated test for this case was found. |
+| Failure-path: ffmpeg unavailable | ❌ Not done | No dedicated failure-path automated test for this case was found. |
+| Failure-path: transcription failure | ❌ Not done | No dedicated failure-path automated test for this case was found. |
+| Failure-path: OpenAI auth failure | ❌ Not done | No dedicated failure-path automated test for this case was found. |
+| Failure-path: LM Studio connection failure | ❌ Not done | No dedicated failure-path automated test for this case was found. |
+| Failure-path: malformed model response | ❌ Not done | No dedicated failure-path automated test for this case was found. |
+| Failure-path: duplicate refresh request | ❌ Not done | No dedicated failure-path automated test for this case was found. |
+| Mocks/fakes for OpenAI | ❌ Not done | No dedicated mock/fake test harness for this dependency was found. |
+| Mocks/fakes for LM Studio | ❌ Not done | No dedicated mock/fake test harness for this dependency was found. |
+| Mocks/fakes for transcript package calls | ❌ Not done | No dedicated mock/fake test harness for this dependency was found. |
+| Mocks/fakes for yt-dlp | ❌ Not done | No dedicated mock/fake test harness for this dependency was found. |
+| Mocks/fakes for Faster-Whisper | ❌ Not done | No dedicated mock/fake test harness for this dependency was found. |
+| Mocks/fakes for YouTube metadata/discovery | ❌ Not done | No dedicated mock/fake test harness for this dependency was found. |
 
 ### Deployment and local developer experience
 
 | Task                                                         | Progress | Notes |
 | ------------------------------------------------------------ | -------- | ----- |
-| docker-compose provided                                      |          |       |
-| Backend Dockerfile provided                                  |          |       |
-| Frontend Dockerfile provided                                 |          |       |
-| .env.example provided                                        |          |       |
-| Migration commands documented                                |          |       |
-| Seed or smoke-test fixtures provided                         |          |       |
-| Startup script or Makefile provided                          |          |       |
-| Full stack starts successfully with one primary command path |          |       |
-| Full test suite runs with another command path               |          |       |
-| Self-hostable local deployment path works                    |          |       |
+| docker-compose provided | ❌ Not done | No docker-compose manifest found. |
+| Backend Dockerfile provided | ❌ Not done | No backend Dockerfile found. |
+| Frontend Dockerfile provided | ❌ Not done | No frontend Dockerfile found. |
+| .env.example provided | ❌ Not done | No `.env.example` file found at repository root. |
+| Migration commands documented | ✅ Done | Migration commands are documented in migration README. |
+| Seed or smoke-test fixtures provided | ❌ Not done | No explicit seed fixture pack beyond lightweight tests. |
+| Startup script or Makefile provided | ✅ Done | Windows startup/plan scripts are included. |
+| Full stack starts successfully with one primary command path | ✅ Done | `run_app.bat` and `server.py` provide single-path startup flow. |
+| Full test suite runs with another command path | 🟡 Partial | Commands are documented, but only limited backend tests are present. |
+| Self-hostable local deployment path works | 🟡 Partial | Local Windows-oriented run path exists; broader self-host deployment docs are limited. |
 
 ### Acceptance criteria checklist
 
 | Task                                                                                  | Progress | Notes |
 | ------------------------------------------------------------------------------------- | -------- | ----- |
-| Full stack starts successfully                                                        |          |       |
-| Migrations apply cleanly                                                              |          |       |
-| Frontend pages are navigable and functional                                           |          |       |
-| Sources can be added and edited                                                       |          |       |
-| Refresh can discover videos according to policy                                       |          |       |
-| Scheduled refresh works, including hourly refresh                                     |          |       |
-| Transcript retrieval works when available                                             |          |       |
-| Fallback transcription works when transcripts are unavailable and fallback is enabled |          |       |
-| Audio files are deleted after successful processing by default                        |          |       |
-| Article generation works through OpenAI                                               |          |       |
-| Article generation works through LM Studio                                            |          |       |
-| Articles appear in the library                                                        |          |       |
-| Reader page is polished and usable                                                    |          |       |
-| Statuses are visible                                                                  |          |       |
-| Failures are retryable                                                                |          |       |
-| Logs and diagnostics are useful                                                       |          |       |
-| Automated tests run successfully                                                      |          |       |
-| No primary page is a dead placeholder                                                 |          |       |
-| No critical flow requires a second implementation run to become operational           |          |       |
+| Full stack starts successfully | 🟡 Partial | Scripts and components are present, but checklist validation is not fully proven in this audit. |
+| Migrations apply cleanly | 🟡 Partial | Startup uses `Base.metadata.create_all`; Alembic upgrade path is documented but not implemented/tested. |
+| Frontend pages are navigable and functional | ✅ Done | Sidebar routes and primary pages are wired and render data flows. |
+| Sources can be added and edited | ✅ Done | Source create and patch flows are implemented. |
+| Refresh can discover videos according to policy | ✅ Done | Discovery + policy filtering + dedup pipeline is implemented. |
+| Scheduled refresh works, including hourly refresh | ✅ Done | Background scheduler ticks sources and supports 60-minute cadence. |
+| Transcript retrieval works when available | ✅ Done | Transcript API integration exists in processing pipeline. |
+| Fallback transcription works when transcripts are unavailable and fallback is enabled | 🟡 Partial | Fallback path exists, but source-specific strategy flags are not yet wired in process flow. |
+| Audio files are deleted after successful processing by default | ✅ Done | Temporary audio is created in temp dir and auto-removed. |
+| Article generation works through OpenAI | ✅ Done | Generation pipeline uses OpenAI-compatible call path. |
+| Article generation works through LM Studio | 🟡 Partial | Provider function supports LM Studio, but pipeline currently hard-codes OpenAI provider. |
+| Articles appear in the library | ✅ Done | Generated articles are returned by `/library` and shown in the Library page. |
+| Reader page is polished and usable | 🟡 Partial | Usable basic reader exists but lacks many polish/accessibility controls in roadmap. |
+| Statuses are visible | 🟡 Partial | Job statuses are visible; full item lifecycle visibility is incomplete. |
+| Failures are retryable | 🟡 Partial | Job retry endpoint exists but robust retry orchestration is limited. |
+| Logs and diagnostics are useful | 🟡 Partial | Both pages/APIs exist but depth/filtering/connectivity checks remain minimal. |
+| Automated tests run successfully | 🟡 Partial | Small backend test set exists; full roadmap test matrix is not implemented. |
+| No primary page is a dead placeholder | ✅ Done | Primary nav routes render working UI components, not blank placeholders. |
+| No critical flow requires a second implementation run to become operational | 🟡 Partial | Core happy path runs, but several roadmap-critical features still require future implementation. |
 ---
