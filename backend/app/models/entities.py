@@ -145,6 +145,25 @@ class Job(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class JobItem(Base):
+    __tablename__ = "job_items"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"))
+    video_item_id: Mapped[int | None] = mapped_column(ForeignKey("video_items.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), default="queued")
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ReadingProgress(Base):
+    __tablename__ = "reading_progress"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    article_id: Mapped[int] = mapped_column(ForeignKey("articles.id"), unique=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class LogEvent(Base):
     __tablename__ = "log_events"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
