@@ -7,6 +7,7 @@ from app.models.entities import (
     Article,
     ArticleVersion,
     ItemStatus,
+    ItemStatusTransition,
     Job,
     JobItem,
     ReadingProgress,
@@ -23,6 +24,21 @@ from app.services.youtube import discover_videos, evaluate_video_policy, normali
 def _get_setting(db, key: str, default: str = "") -> str:
     row = db.execute(select(AppSetting).where(AppSetting.key == key)).scalar_one_or_none()
     return row.value if row and row.value is not None else default
+
+
+def _set_item_status(db, item: VideoItem, to_status: ItemStatus, message: str = ""):
+    from_status = item.status.value if item.status else ""
+    item.status = to_status
+    if message:
+        item.status_message = message
+    db.add(
+        ItemStatusTransition(
+            video_item_id=item.id,
+            from_status=from_status,
+            to_status=to_status.value,
+            message=message,
+        )
+    )
 
 
 def refresh_source(db, source_id: int):
@@ -87,6 +103,7 @@ def refresh_source(db, source_id: int):
         item = VideoItem(source_id=source_id, video_id=raw["video_id"], url=raw["url"], title=raw["title"], status=ItemStatus.queued)
         db.add(item)
         db.flush()
+        _set_item_status(db, item, ItemStatus.queued)
         enqueued_count += 1
         try:
             process_video_item(db, item.id)
@@ -113,26 +130,44 @@ def process_video_item(db, item_id: int):
     source = db.get(Source, item.source_id)
 
     try:
-        item.status = ItemStatus.transcript_searching
+        _set_item_status(db, item, ItemStatus.metadata_fetched)
+        _set_item_status(db, item, ItemStatus.transcript_searching)
+
         language_pref = _get_setting(db, "transcript_languages", "en")
         languages = [lang.strip() for lang in language_pref.split(",") if lang.strip()] or ["en"]
-        text, source_kind = fetch_transcript(item.url, languages)
 
         strategy = source.transcript_strategy if source else "transcript_first"
         fallback_enabled = source.fallback_enabled if source else True
+        text = ""
+        source_kind = "youtube_transcript"
         fallback_used = False
+        transcribe_meta = {"transcription_seconds": 0, "audio_retained_path": ""}
+
+        if strategy != "force_local_transcription":
+            try:
+                text, source_kind = fetch_transcript(item.url, languages, strategy=strategy)
+            except Exception:
+                text = ""
 
         if not text and should_fallback_to_transcription(strategy, False, fallback_enabled):
-            item.status = ItemStatus.transcription_started
+            _set_item_status(db, item, ItemStatus.audio_downloaded)
+            _set_item_status(db, item, ItemStatus.transcription_started)
             yt_dlp_command = _get_setting(db, "yt_dlp_path", "yt-dlp").strip() or "yt-dlp"
-            text = transcribe_audio_locally(item.url, yt_dlp_command=yt_dlp_command)
+            ffmpeg_command = _get_setting(db, "ffmpeg_path", "ffmpeg").strip() or "ffmpeg"
+            retain_failed = _get_setting(db, "retain_failed_audio", "false").lower() in {"1", "true", "yes", "on"}
+            text, transcribe_meta = transcribe_audio_locally(
+                item.url,
+                yt_dlp_command=yt_dlp_command,
+                ffmpeg_command=ffmpeg_command,
+                retain_audio_on_failure=retain_failed,
+            )
             source_kind = "local_transcription"
             fallback_used = True
-            item.status = ItemStatus.transcription_completed
+            _set_item_status(db, item, ItemStatus.transcription_completed)
         elif text:
-            item.status = ItemStatus.transcript_found
+            _set_item_status(db, item, ItemStatus.transcript_found)
         else:
-            item.status = ItemStatus.transcript_unavailable
+            _set_item_status(db, item, ItemStatus.transcript_unavailable)
 
         transcript = db.execute(select(Transcript).where(Transcript.video_item_id == item.id)).scalar_one_or_none()
         if transcript:
@@ -142,6 +177,8 @@ def process_video_item(db, item_id: int):
             transcript.strategy = strategy
             transcript.fallback_used = fallback_used
             transcript.transcription_model = "faster-whisper-base-cpu-int8" if fallback_used else ""
+            transcript.transcription_seconds = int(transcribe_meta.get("transcription_seconds", 0))
+            transcript.audio_retained_path = transcribe_meta.get("audio_retained_path", "")
             transcript.error_message = ""
             transcript.fetched_at = datetime.utcnow()
         else:
@@ -154,18 +191,36 @@ def process_video_item(db, item_id: int):
                     strategy=strategy,
                     fallback_used=fallback_used,
                     transcription_model="faster-whisper-base-cpu-int8" if fallback_used else "",
+                    transcription_seconds=int(transcribe_meta.get("transcription_seconds", 0)),
+                    audio_retained_path=transcribe_meta.get("audio_retained_path", ""),
                     fetched_at=datetime.utcnow(),
                 )
             )
 
-        item.status = ItemStatus.generation_started
+        _set_item_status(db, item, ItemStatus.generation_started)
         provider_name = _get_setting(db, "generation_provider", "openai")
         model_name = _get_setting(db, "generation_model", "gpt-4.1-mini")
         mode_name = _get_setting(db, "generation_mode", "detailed")
         global_template = _get_setting(db, "global_prompt_template", "Convert to {{mode}} article\n{{transcript}}")
+        timeout_seconds = float(_get_setting(db, "generation_timeout_seconds", "60"))
+        temperature = float(_get_setting(db, "generation_temperature", "0.2"))
+        max_tokens = int(_get_setting(db, "generation_max_tokens", "1200"))
         prompt_template = source.prompt_override if source and source.prompt_override else global_template
         prompt = render_prompt(prompt_template, text, mode_name)
-        body = generate_article(text, prompt, ProviderConfig(provider=provider_name, model=model_name))
+        body = generate_article(
+            text,
+            prompt,
+            ProviderConfig(
+                provider=provider_name,
+                model=model_name,
+                temperature=temperature,
+                timeout_seconds=timeout_seconds,
+                max_tokens=max_tokens,
+                openai_api_key=_get_setting(db, "openai_api_key", ""),
+                openai_base_url=_get_setting(db, "openai_base_url", ""),
+                lmstudio_base_url=_get_setting(db, "lmstudio_base_url", ""),
+            ),
+        )
 
         article = db.execute(select(Article).where(Article.video_item_id == item.id)).scalar_one_or_none()
         if not article:
@@ -179,23 +234,26 @@ def process_video_item(db, item_id: int):
             article.latest_version = version_num
 
         db.add(ArticleVersion(article_id=article.id, version=version_num, mode=mode_name, prompt_snapshot=prompt, body=body))
-        item.status = ItemStatus.published
+        _set_item_status(db, item, ItemStatus.generation_completed)
+        _set_item_status(db, item, ItemStatus.published)
 
         job = Job(type="process_item", status="done", video_item_id=item.id, source_id=item.source_id)
         db.add(job)
         db.flush()
         db.add(JobItem(job_id=job.id, video_item_id=item.id, status="done"))
     except Exception as exc:
-        max_attempts = max(0, source.retry_max_attempts if source else 0)
+        global_attempts = int(_get_setting(db, "retry_default_max_attempts", "2"))
+        global_base = int(_get_setting(db, "retry_default_backoff_minutes", "10"))
+        global_mul = int(_get_setting(db, "retry_default_backoff_multiplier", "2"))
+        max_attempts = max(0, source.retry_max_attempts if source else global_attempts)
         item.retry_count = (item.retry_count or 0) + 1
         if item.retry_count <= max_attempts:
-            base = max(1, source.retry_backoff_minutes if source else 10)
-            mul = max(1, source.retry_backoff_multiplier if source else 2)
-            item.status = ItemStatus.retry_pending
+            base = max(1, source.retry_backoff_minutes if source else global_base)
+            mul = max(1, source.retry_backoff_multiplier if source else global_mul)
+            _set_item_status(db, item, ItemStatus.retry_pending, str(exc))
             item.next_retry_at = datetime.utcnow() + timedelta(minutes=base * (mul ** max(0, item.retry_count - 1)))
         else:
-            item.status = ItemStatus.failed
-        item.status_message = str(exc)
+            _set_item_status(db, item, ItemStatus.failed, str(exc))
         transcript = db.execute(select(Transcript).where(Transcript.video_item_id == item.id)).scalar_one_or_none()
         if transcript:
             transcript.error_message = str(exc)

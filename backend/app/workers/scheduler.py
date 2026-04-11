@@ -37,13 +37,20 @@ def tick_sources():
         sources = db.execute(select(Source).where(Source.state == SourceState.enabled)).scalars().all()
         now = datetime.utcnow()
 
+        default_cadence = max(5, _int_setting(db, "scheduler_default_cadence_minutes", 60))
         processed = 0
         for src in sources:
             if processed >= cap:
                 break
-            if not src.next_run_at or src.next_run_at <= now:
+            cadence = max(5, src.cadence_minutes or default_cadence)
+            if not src.cadence_minutes:
+                src.cadence_minutes = cadence
+            if not src.next_run_at:
+                src.next_run_at = now
+            if src.next_run_at <= now:
                 refresh_source(db, src.id)
-                src.next_run_at = now + timedelta(minutes=src.cadence_minutes)
+                missed_intervals = max(1, int((now - src.next_run_at).total_seconds() // (cadence * 60)) + 1)
+                src.next_run_at = src.next_run_at + timedelta(minutes=cadence * missed_intervals)
                 processed += 1
 
         retry_items = db.execute(

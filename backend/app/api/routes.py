@@ -17,6 +17,7 @@ from app.models.entities import (
 )
 from app.schemas.common import CollectionCreate, MarkReadPayload, ReadingProgressPayload, SettingsPatch
 from app.schemas.source import SourceCreate, SourceOut, SourcePatch
+from app.services.generation import ProviderConfig, generate_article, render_prompt
 from app.services.pipeline import process_video_item, refresh_source
 from app.services.youtube import normalize_source_url, resolve_source_identity
 from app.workers.scheduler import scheduler_status
@@ -31,11 +32,18 @@ DEFAULT_APP_SETTINGS = {
     "scheduler_enabled": "true",
     "scheduler_default_cadence_minutes": "60",
     "scheduler_concurrency_cap": "2",
+    "retry_default_max_attempts": "2",
+    "retry_default_backoff_minutes": "10",
+    "retry_default_backoff_multiplier": "2",
     "generation_provider": "openai",
     "generation_model": "gpt-4.1-mini",
     "generation_mode": "detailed",
+    "generation_temperature": "0.2",
+    "generation_timeout_seconds": "60",
+    "generation_max_tokens": "1200",
     "global_prompt_template": "Convert to {{mode}} article\n{{transcript}}",
     "transcript_languages": "en",
+    "retain_failed_audio": "false",
 }
 SECRET_KEYS = {"openai_api_key"}
 
@@ -86,12 +94,16 @@ def create_source(body: SourceCreate, db: Session = Depends(get_db)):
     except Exception:
         resolved = {"normalized_url": normalized, "canonical_url": normalized, "channel_id": "", "title": ""}
 
+    default_cadence_row = db.execute(select(AppSetting).where(AppSetting.key == "scheduler_default_cadence_minutes")).scalar_one_or_none()
+    default_cadence = int(default_cadence_row.value) if default_cadence_row and str(default_cadence_row.value).isdigit() else 60
+    cadence = body.cadence_minutes or default_cadence
+
     src = Source(
         url=resolved.get("normalized_url", normalized),
         canonical_url=resolved.get("canonical_url", normalized),
         channel_id=resolved.get("channel_id", ""),
         title=body.title or resolved.get("title") or normalized,
-        cadence_minutes=body.cadence_minutes,
+        cadence_minutes=cadence,
         discovery_mode=body.discovery_mode,
         max_videos=body.max_videos,
         rolling_window_hours=body.rolling_window_hours,
@@ -179,6 +191,17 @@ def item_detail(item_id: int, db: Session = Depends(get_db)):
     return item
 
 
+@router.get('/items/{item_id}/timeline')
+def item_timeline(item_id: int, db: Session = Depends(get_db)):
+    from app.models.entities import ItemStatusTransition
+
+    return db.execute(
+        select(ItemStatusTransition)
+        .where(ItemStatusTransition.video_item_id == item_id)
+        .order_by(ItemStatusTransition.created_at.asc())
+    ).scalars().all()
+
+
 @router.get('/transcripts/{item_id}')
 def transcript_detail(item_id: int, db: Session = Depends(get_db)):
     from app.models.entities import Transcript
@@ -193,6 +216,42 @@ def transcript_detail(item_id: int, db: Session = Depends(get_db)):
 def transcript_retry(item_id: int, db: Session = Depends(get_db)):
     process_video_item(db, item_id)
     return {"retried": True}
+
+
+@router.post('/generation/prompt-preview')
+def generation_prompt_preview(payload: dict, db: Session = Depends(get_db)):
+    template_setting = db.execute(select(AppSetting).where(AppSetting.key == "global_prompt_template")).scalar_one_or_none()
+    template = payload.get("template") or (template_setting.value if template_setting else DEFAULT_APP_SETTINGS["global_prompt_template"])
+    transcript = payload.get("transcript", "")
+    mode = payload.get("mode") or "detailed"
+    return {"prompt": render_prompt(template, transcript, mode)}
+
+
+@router.post('/generation/test-prompt')
+def generation_test_prompt(payload: dict, db: Session = Depends(get_db)):
+    transcript = payload.get("transcript", "")
+    if not transcript.strip():
+        raise HTTPException(400, "transcript is required")
+    mode = payload.get("mode") or "detailed"
+    template = payload.get("template") or DEFAULT_APP_SETTINGS["global_prompt_template"]
+    prompt = render_prompt(template, transcript, mode)
+    rows = db.execute(select(AppSetting)).scalars().all()
+    settings_map = {r.key: r.value for r in rows}
+    body = generate_article(
+        transcript,
+        prompt,
+        ProviderConfig(
+            provider=settings_map.get("generation_provider", "openai"),
+            model=settings_map.get("generation_model", "gpt-4.1-mini"),
+            temperature=float(settings_map.get("generation_temperature", "0.2")),
+            timeout_seconds=float(settings_map.get("generation_timeout_seconds", "60")),
+            max_tokens=int(settings_map.get("generation_max_tokens", "1200")),
+            openai_api_key=settings_map.get("openai_api_key", ""),
+            openai_base_url=settings_map.get("openai_base_url", ""),
+            lmstudio_base_url=settings_map.get("lmstudio_base_url", ""),
+        ),
+    )
+    return {"prompt": prompt, "body": body}
 
 
 @router.get('/library')
@@ -247,6 +306,7 @@ def article_detail(article_id: int, db: Session = Depends(get_db)):
     progress = db.execute(select(ReadingProgress).where(ReadingProgress.article_id == article_id)).scalar_one_or_none()
     return {
         "id": article.id,
+        "video_item_id": article.video_item_id,
         "title": item.title if item else '',
         "latest_version": article.latest_version,
         "is_read": article.is_read,
