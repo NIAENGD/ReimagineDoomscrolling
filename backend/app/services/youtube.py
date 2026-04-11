@@ -19,6 +19,8 @@ def normalize_source_url(url: str) -> str:
     parsed = urlparse(url)
     if parsed.path.startswith("/channel/"):
         return f"https://www.youtube.com{parsed.path}"
+    if parsed.path.startswith("/c/") or parsed.path.startswith("/user/"):
+        return f"https://www.youtube.com{parsed.path}"
     return url
 
 
@@ -46,6 +48,9 @@ def _feed_url_from_source_url(source_url: str) -> str:
     if path.startswith("/@"):
         handle = path.split("/@", 1)[1]
         return f"{YOUTUBE_FEED_BASE}?user={handle}"
+    if path.startswith("/user/"):
+        username = path.split("/user/", 1)[1]
+        return f"{YOUTUBE_FEED_BASE}?user={username}"
 
     query = parse_qs(parsed.query)
     if "channel_id" in query and query["channel_id"]:
@@ -54,7 +59,7 @@ def _feed_url_from_source_url(source_url: str) -> str:
     raise ValueError("Unsupported YouTube source URL format for discovery")
 
 
-def _parse_atom_entries(feed_xml: str) -> list[dict]:
+def _parse_atom_feed(feed_xml: str) -> tuple[list[dict], dict]:
     import xml.etree.ElementTree as ET
 
     ns = {
@@ -64,6 +69,8 @@ def _parse_atom_entries(feed_xml: str) -> list[dict]:
     }
     root = ET.fromstring(feed_xml)
     entries: list[dict] = []
+    channel_title = root.findtext("atom:title", default="", namespaces=ns)
+    channel_id = root.findtext("yt:channelId", default="", namespaces=ns)
 
     for entry in root.findall("atom:entry", ns):
         video_id = entry.findtext("yt:videoId", default="", namespaces=ns)
@@ -89,7 +96,27 @@ def _parse_atom_entries(feed_xml: str) -> list[dict]:
             }
         )
 
-    return entries
+    return entries, {"title": channel_title, "channel_id": channel_id}
+
+
+def resolve_source_identity(source_url: str) -> dict:
+    normalized = normalize_source_url(source_url)
+    feed_url = _feed_url_from_source_url(normalized)
+
+    with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+        response = client.get(feed_url)
+        response.raise_for_status()
+    entries, metadata = _parse_atom_feed(response.text)
+
+    channel_id = metadata.get("channel_id", "")
+    canonical_url = f"https://www.youtube.com/channel/{channel_id}" if channel_id else normalized
+    return {
+        "normalized_url": normalized,
+        "canonical_url": canonical_url,
+        "channel_id": channel_id,
+        "title": metadata.get("title", ""),
+        "last_discovered_count": len(entries),
+    }
 
 
 def discover_videos(source) -> list[dict]:
@@ -102,9 +129,16 @@ def discover_videos(source) -> list[dict]:
         with httpx.Client(timeout=20.0, follow_redirects=True) as client:
             response = client.get(feed_url)
             response.raise_for_status()
-        videos = _parse_atom_entries(response.text)
+        videos, _ = _parse_atom_feed(response.text)
     except Exception:
         return []
+
+    if getattr(source, "discovery_mode", "latest_n") == "since_last_success" and getattr(source, "last_success_at", None):
+        videos = [
+            video
+            for video in videos
+            if video.get("published_at") and video["published_at"] > source.last_success_at
+        ]
 
     limit = max(int(getattr(source, "max_videos", 10) or 10), 0)
     return videos[:limit]

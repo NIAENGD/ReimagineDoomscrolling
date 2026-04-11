@@ -4,8 +4,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models.entities import AppSetting, Source, SourceState
-from app.services.pipeline import refresh_source
+from app.models.entities import AppSetting, ItemStatus, Source, SourceState, VideoItem
+from app.services.pipeline import process_video_item, refresh_source
 
 scheduler = BackgroundScheduler()
 
@@ -45,6 +45,16 @@ def tick_sources():
                 refresh_source(db, src.id)
                 src.next_run_at = now + timedelta(minutes=src.cadence_minutes)
                 processed += 1
+
+        retry_items = db.execute(
+            select(VideoItem).where(
+                VideoItem.status == ItemStatus.retry_pending,
+                VideoItem.next_retry_at.is_not(None),
+                VideoItem.next_retry_at <= now,
+            ).limit(cap)
+        ).scalars().all()
+        for item in retry_items:
+            process_video_item(db, item.id)
         db.commit()
     finally:
         db.close()
