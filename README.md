@@ -393,6 +393,8 @@ Status key used below:
 
 ### Testing
 
+Primary integration scenarios now use the RealLifeLore channel URL (`https://www.youtube.com/@RealLifeLore`) with deterministic monkeypatched discovery/transcript/generation paths for stable test execution.
+
 | Task                                                | Progress | Notes |
 | --------------------------------------------------- | -------- | ----- |
 | Unit: source URL normalization | ✅ Done | Covered in `backend/tests/test_unit.py`. |
@@ -410,14 +412,14 @@ Status key used below:
 | Integration: update settings | ✅ Done | Added integration coverage for writing/updating settings and validating persisted behavior via API. |
 | Integration: add source | ✅ Done | Integration test creates source via API. |
 | Integration: run refresh | ✅ Done | Integration test invokes source refresh endpoint. |
-| Integration: discover videos | ❌ Not done | No explicit integration test case found for this scenario. |
-| Integration: transcript success path | ❌ Not done | No explicit integration test case found for this scenario. |
-| Integration: transcript failure plus audio fallback | ❌ Not done | No explicit integration test case found for this scenario. |
-| Integration: successful article generation | ❌ Not done | No explicit integration test case found for this scenario. |
-| Integration: article regeneration versioning | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: discover videos | ✅ Done | Added integration tests that monkeypatch discovery for the RealLifeLore source and assert discovered items appear in library output. |
+| Integration: transcript success path | ✅ Done | Added integration coverage for successful transcript fetch, transcript persistence, and published status transitions. |
+| Integration: transcript failure plus audio fallback | ✅ Done | Added integration coverage that forces transcript failure, exercises local transcription fallback, and validates fallback metadata. |
+| Integration: successful article generation | ✅ Done | Added integration tests that verify article generation output is persisted for discovered RealLifeLore items. |
+| Integration: article regeneration versioning | ✅ Done | Added integration test that regenerates an article and asserts version increments/history growth. |
 | Integration: duplicate suppression | ✅ Done | Added integration test that refreshes duplicate feed entries and verifies single library item output. |
-| Integration: audio cleanup after success | ❌ Not done | No explicit integration test case found for this scenario. |
-| Integration: retry failed item | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: audio cleanup after success | ✅ Done | Added fallback integration coverage that asserts `delete_audio_after_success` is enabled for successful local transcription calls. |
+| Integration: retry failed item | ✅ Done | Added integration test that fails processing once, retries the failed job, and verifies a successful transcript/article outcome. |
 | Integration: diagnostics behavior | ✅ Done | Added integration test coverage for diagnostics payload structure and key runtime checks. |
 | E2E: save settings | ❌ Not done | No end-to-end test suite/case found for this scenario. |
 | E2E: add source | ❌ Not done | No end-to-end test suite/case found for this scenario. |
@@ -429,14 +431,14 @@ Status key used below:
 | E2E: view transcript | ❌ Not done | No end-to-end test suite/case found for this scenario. |
 | E2E: view diagnostics | ❌ Not done | No end-to-end test suite/case found for this scenario. |
 | E2E: regenerate article version | ❌ Not done | No end-to-end test suite/case found for this scenario. |
-| Failure-path: invalid source URL | ❌ Not done | No dedicated failure-path automated test for this case was found. |
-| Failure-path: transcript unavailable | ❌ Not done | No dedicated failure-path automated test for this case was found. |
-| Failure-path: yt-dlp failure | ❌ Not done | No dedicated failure-path automated test for this case was found. |
+| Failure-path: invalid source URL | ✅ Done | Added integration test that submits a non-YouTube URL and verifies API rejection. |
+| Failure-path: transcript unavailable | ✅ Done | Added integration test that forces transcript fetch failure before fallback handling. |
+| Failure-path: yt-dlp failure | ✅ Done | Added integration test that simulates yt-dlp/local transcription failure and verifies failed job + retry flow. |
 | Failure-path: ffmpeg unavailable | ❌ Not done | No dedicated failure-path automated test for this case was found. |
 | Failure-path: transcription failure | ❌ Not done | No dedicated failure-path automated test for this case was found. |
-| Failure-path: OpenAI auth failure | ❌ Not done | No dedicated failure-path automated test for this case was found. |
-| Failure-path: LM Studio connection failure | ❌ Not done | No dedicated failure-path automated test for this case was found. |
-| Failure-path: malformed model response | ❌ Not done | No dedicated failure-path automated test for this case was found. |
+| Failure-path: OpenAI auth failure | ✅ Done | Added integration test that forces generation provider auth failure and verifies failed job capture. |
+| Failure-path: LM Studio connection failure | ✅ Done | Added integration test that forces LM Studio provider connectivity failure and verifies failed job capture. |
+| Failure-path: malformed model response | ✅ Done | Added integration test that forces malformed model response exceptions and verifies failure handling. |
 | Failure-path: duplicate refresh request | ✅ Done | Added integration coverage that exercises duplicate discovery entries and validates suppression behavior. |
 | Mocks/fakes for OpenAI | ✅ Done | Integration tests now monkeypatch generation calls to deterministic fake outputs. |
 | Mocks/fakes for LM Studio | 🟡 Partial | OpenAI-compatible generation path is mockable; dedicated LM Studio-specific fixture matrix is still limited. |
