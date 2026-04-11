@@ -53,7 +53,6 @@ Use `run_app.bat` option 5, or run:
 | Generation provider layer | 🟡 Core path implemented | Provider abstraction supports OpenAI and LM Studio/OpenAI-compatible endpoint. | Prompt management/version policy sophistication is limited; no token budgeting/safety controls yet. | Good initial abstraction point. |
 | Scheduler/jobs/retry | 🟡 Basic implementation | APScheduler source tick and `next_run_at` updates exist; jobs are recorded on item processing attempts. | No full retry state machine/backoff orchestration; retry endpoint only marks status. | Observability exists but execution semantics are still lightweight. |
 | Frontend web app | 🟡 Feature baseline | Multi-page SPA supports dashboard, source CRUD-lite, jobs list/retry, library, reader version switch, settings, diagnostics, logs, collections. | Advanced UX from plan (rich source policy editor, reader polish options, deep filters/sorts) is not complete. | Useful operator UI is in place. |
-| Browser extension workflow | 🟢 Implemented (parallel path) | End-to-end automation scripts exist for collecting links, prompting ChatGPT, and viewing results pages. | Heavily dependent on DOM/cookie assumptions and local helper server endpoints; brittle against site UI changes. | Still valuable as experimental/legacy execution path. |
 | Test coverage | 🟡 Foundational | Unit tests + one integration test exist for key service behavior and API flow sanity. | Coverage depth is still modest vs roadmap goals; frontend component tests are limited. | Baseline guardrails exist. |
 | Security/config hardening | 🔴 Not done enough | Config and diagnostics primitives exist. | CORS/config hardening, auth modes, and stricter deployment safeguards remain roadmap items. | Biggest production-readiness gap. |
 
@@ -131,48 +130,6 @@ Use `run_app.bat` option 5, or run:
 - `Diagnostics()`
 - `Logs()`
 - `Collections()`
-
-### 4) Browser Extension (automation path)
-
-#### Popup controller (`extension/popup.js`)
-- `addLog(text)`
-- `checkLogin()`
-- `checkServer()`
-- `refreshStatus()`
-
-#### Background orchestration (`extension/background.js`)
-- `log(msg)`
-- `setStatus(status, progress)`
-- `persistArticle(a)`
-- `parseJsonObject(text)`
-- `startProcessing()`
-- `openPopup(url, opts)`
-- `waitTabComplete(tabId)`
-- `ensureChatGPTReady()`
-- `openTabs()`
-- `collectLinks(tabId, count)`
-- `fetchTranscript(url)`
-- `fetchTitle(url)`
-- `processTranscript(transcript, title)`
-- `runChatPrompt(prompt)`
-- `watchAndReact(url, like)`
-- `cleanupTabs()`
-
-#### Results UI (`extension/results.js`)
-- `statusText(v)`
-- `fmtDate(iso)`
-- `renderStats(articles)`
-- `renderRows(articles)`
-- `applyFilters()`
-
-#### ChatGPT page content script (`extension/chatgpt.js`)
-- `waitFor(selector, root, timeout)`
-- `waitAssistantReplyInternal()`
-- `getComposer()`
-- `dispatchEnter(node)`
-- `dispatchInputLikeEvents(el)`
-- `sleep(ms)`
-- `sendPromptInternal(promptText)`
 
 ---
 
