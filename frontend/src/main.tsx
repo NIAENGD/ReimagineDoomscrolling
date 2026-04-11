@@ -67,7 +67,10 @@ type ItemTransition = {
 function Page({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className='page'>
-      <h1>{title}</h1>
+      <div className='page-header'>
+        <h1>{title}</h1>
+        <p className='muted'>Control your reading pipeline with a cleaner, calmer workflow.</p>
+      </div>
       {children}
     </section>
   );
@@ -85,6 +88,13 @@ function Home() {
 
   return (
     <Page title='Dashboard'>
+      <article className='card hero'>
+        <div>
+          <p className='eyebrow'>Overview</p>
+          <h2>Turn noisy video feeds into a focused reading queue.</h2>
+          <p className='muted'>Track ingestion, quality, and progress without jumping between screens.</p>
+        </div>
+      </article>
       <div className='grid'>
         <article className='card stat'><p className='label'>Sources</p><p className='value'>{sources.data?.length ?? 0}</p></article>
         <article className='card stat'><p className='label'>Active sources</p><p className='value'>{activeSources}</p></article>
@@ -352,7 +362,11 @@ function Layout() {
   const links = [['/', 'Home'], ['/sources', 'Sources'], ['/jobs', 'Jobs'], ['/library', 'Library'], ['/collections', 'Collections'], ['/settings', 'Settings'], ['/diagnostics', 'Diagnostics'], ['/logs', 'Logs']] as const;
   return (
     <div className='layout'>
-      <aside><h2>ReimagineDoomscrolling</h2><nav>{links.map(([href, label]) => <NavLink key={href} to={href} className={({ isActive }) => (isActive ? 'active' : '')} end={href === '/'}>{label}</NavLink>)}</nav></aside>
+      <aside>
+        <h2>ReimagineDoomscrolling</h2>
+        <p className='muted product-subtitle'>Reader OS</p>
+        <nav>{links.map(([href, label]) => <NavLink key={href} to={href} className={({ isActive }) => (isActive ? 'active' : '')} end={href === '/'}>{label}</NavLink>)}</nav>
+      </aside>
       <main>
         <Routes>
           <Route path='/' element={<Home />} />
