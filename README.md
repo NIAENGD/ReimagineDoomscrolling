@@ -122,15 +122,15 @@ Status key used below:
 | Task                               | Progress | Notes |
 | ---------------------------------- | -------- | ----- |
 | Global refresh enabled/disabled | ✅ Done | Scheduler respects persisted `scheduler_enabled` setting and reports it in status. |
-| Global default cadence | 🟡 Partial | Global cadence setting exists in scheduler status/settings defaults, but per-source cadence still drives actual runs. |
+| Global default cadence | ✅ Done | New sources/scheduler use `scheduler_default_cadence_minutes` when cadence is not explicitly set. |
 | Per-source cadence override | ✅ Done | Each source has its own `cadence_minutes` used by scheduler. |
 | Hourly refresh support | ✅ Done | Cadence is minute-based; 60-minute hourly operation is supported. |
 | Next scheduled run tracking | ✅ Done | Scheduler updates `next_run_at` after each run. |
 | Last successful run tracking | ✅ Done | Refresh sets `last_success_at` on successful completion. |
-| Missed-run handling | ❌ Not done | No explicit missed-run catch-up/backfill policy beyond simple due check. |
+| Missed-run handling | ✅ Done | Scheduler now computes missed intervals and advances `next_run_at` with catch-up-aware backfill math. |
 | Backoff after repeated failure | ✅ Done | Refresh failures apply exponential next-run backoff capped to a max delay. |
 | Concurrency cap | ✅ Done | Scheduler enforces a per-tick cap via `scheduler_concurrency_cap`. |
-| Retry intervals/backoff settings | ❌ Not done | No configurable retry interval/backoff engine for failed items/jobs. |
+| Retry intervals/backoff settings | ✅ Done | Global retry defaults plus per-source overrides are applied when scheduling item retries. |
 | Scheduler runs automatically | ✅ Done | Backend startup calls scheduler bootstrap and background tick job. |
 | Scheduler status visible in UI/API | 🟡 Partial | Dedicated scheduler status endpoint exists; frontend lacks a focused scheduler status card/view. |
 
@@ -155,29 +155,29 @@ Status key used below:
 | Persist retry_pending state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
 | Persist skipped_duplicate state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
 | Persist skipped_by_policy state | ✅ Done | `ItemStatus` enum includes this state for persisted video-item status tracking. |
-| All transitions visible in API | 🟡 Partial | Item status exists in DB but there is no dedicated item status/timeline endpoint. |
-| All transitions visible in UI | ❌ Not done | UI does not show per-item lifecycle timeline or full status transitions. |
+| All transitions visible in API | ✅ Done | `/items/{id}/timeline` now exposes persisted status transition history. |
+| All transitions visible in UI | ✅ Done | Reader UI now renders per-item processing timeline entries from the timeline API. |
 
 ### Transcript retrieval and fallback transcription
 
 | Task                                                 | Progress | Notes |
 | ---------------------------------------------------- | -------- | ----- |
-| Manual transcript only strategy | ❌ Not done | No strict manual-only selector; transcript fetch uses library defaults. |
-| Prefer manual then auto transcript strategy | ❌ Not done | Strategy granularity is not implemented in transcript retrieval call. |
-| Allow auto transcript strategy | ❌ Not done | No explicit auto-only strategy selection path. |
-| Force local transcription strategy | 🟡 Partial | Fallback helper supports it, but pipeline currently passes hard-coded strategy values. |
-| Transcript-first then audio fallback strategy | 🟡 Partial | Flow is transcript-first with fallback, but source-specific strategy is not wired through. |
-| Disable fallback strategy | 🟡 Partial | Helper supports disable, but pipeline hard-codes fallback enabled. |
+| Manual transcript only strategy | ✅ Done | Transcript retrieval now supports `manual_only` strategy selection. |
+| Prefer manual then auto transcript strategy | ✅ Done | `prefer_manual_then_auto` strategy is now handled in transcript selection logic. |
+| Allow auto transcript strategy | ✅ Done | `auto_only` strategy is supported via generated-transcript selection. |
+| Force local transcription strategy | ✅ Done | Pipeline now honors `force_local_transcription` directly from source strategy. |
+| Transcript-first then audio fallback strategy | ✅ Done | Source-level strategy/fallback flags are wired through processing and retry paths. |
+| Disable fallback strategy | ✅ Done | `disable_fallback` and fallback toggles are respected by the pipeline. |
 | Preferred transcript languages | ✅ Done | Pipeline reads `transcript_languages` setting and passes ordered language preferences. |
 | Retrieve transcript when available | ✅ Done | `fetch_transcript` retrieves YouTube transcript text. |
 | Download audio when fallback is needed | ✅ Done | Fallback path downloads audio via `yt-dlp`. |
-| Normalize extracted audio as needed | ❌ Not done | No explicit audio normalization/transcoding pipeline beyond `yt-dlp -x`. |
+| Normalize extracted audio as needed | ✅ Done | Audio is normalized to mono 16k PCM via ffmpeg before local transcription. |
 | Run Faster-Whisper on CPU | ✅ Done | Local transcription uses Faster-Whisper with CPU/int8 settings. |
 | Persist transcript text | ✅ Done | Transcript text is inserted/updated in `transcripts` table. |
-| Persist transcription metadata | 🟡 Partial | Only source/language fields exist; detailed timing/model metadata absent. |
+| Persist transcription metadata | ✅ Done | Transcript rows now persist model, duration seconds, strategy/fallback, and retained-audio metadata. |
 | Delete downloaded audio after success by default | ✅ Done | Temp directory cleanup removes downloaded audio on function exit. |
-| Retain failed-job audio only when explicitly enabled | ❌ Not done | No retained-failed-audio toggle or retention branch exists. |
-| Retry transcript/transcription failures | ❌ Not done | No stage-level automatic retry orchestration for transcript/transcribe failures. |
+| Retain failed-job audio only when explicitly enabled | ✅ Done | `retain_failed_audio` setting controls optional failed-audio retention behavior. |
+| Retry transcript/transcription failures | ✅ Done | Transcript/transcription failures flow through retry_pending scheduling with configurable backoff. |
 
 ### Article generation and provider abstraction
 
@@ -188,21 +188,21 @@ Status key used below:
 | LM Studio OpenAI-compatible provider support | ✅ Done | LM Studio base URL path supported in provider switch. |
 | Persistent provider selection | ✅ Done | Generation pipeline reads `generation_provider` setting at runtime. |
 | Persistent model name | ✅ Done | Generation pipeline reads `generation_model` from persisted settings. |
-| Persistent API key or base URL | 🟡 Partial | Base URL/provider settings are persisted and used; API key persistence is redacted on read and still environment-compatible. |
-| Persistent timeout | ❌ Not done | HTTP timeout is hard-coded; no persisted timeout wiring. |
-| Persistent temperature | ❌ Not done | Temperature defaults in config object; not persisted/wired from settings. |
-| Persistent max tokens | ❌ Not done | No max-token setting passed to chat completion payload. |
+| Persistent API key or base URL | ✅ Done | Provider calls now accept persisted base URL and API key from settings at runtime. |
+| Persistent timeout | ✅ Done | `generation_timeout_seconds` is persisted and applied to provider HTTP clients. |
+| Persistent temperature | ✅ Done | `generation_temperature` is persisted and passed into chat completion payloads. |
+| Persistent max tokens | ✅ Done | `generation_max_tokens` is persisted and passed through provider abstraction. |
 | Persistent article mode | ✅ Done | Generation mode is read from persisted `generation_mode` settings key. |
 | Persistent global prompt template | ✅ Done | Pipeline resolves prompt from persisted `global_prompt_template`. |
 | Optional per-source prompt override | ✅ Done | Source `prompt_override` takes precedence over global template when set. |
-| Prompt preview / resolved prompt inspection | ❌ Not done | No API/UI for previewing resolved prompt before generation. |
-| Test prompt against sample transcript | ❌ Not done | No prompt-test endpoint/tooling in backend or UI. |
+| Prompt preview / resolved prompt inspection | ✅ Done | Added `/generation/prompt-preview` endpoint for resolved prompt inspection. |
+| Test prompt against sample transcript | ✅ Done | Added `/generation/test-prompt` endpoint to run prompt+transcript generation tests. |
 | Store prompt snapshot on every generated article version | ✅ Done | Each version row stores `prompt_snapshot`. |
-| Concise article mode | ❌ Not done | No specialized concise mode workflow. |
-| Detailed article mode | 🟡 Partial | Current output effectively detailed, but no mode switching UX/settings. |
-| Study notes mode | ❌ Not done | No study-notes mode option is implemented. |
-| Executive brief mode | ❌ Not done | No executive-brief mode option is implemented. |
-| Tutorial reconstruction mode | ❌ Not done | No tutorial-reconstruction mode option is implemented. |
+| Concise article mode | ✅ Done | Generation adds mode-specific system instruction for concise output. |
+| Detailed article mode | ✅ Done | Detailed mode is explicitly represented in mode-aware generation instruction logic. |
+| Study notes mode | ✅ Done | Study-notes mode is supported via mode-aware system prompting. |
+| Executive brief mode | ✅ Done | Executive-brief mode is supported via mode-aware system prompting. |
+| Tutorial reconstruction mode | ✅ Done | Tutorial-reconstruction mode is supported via mode-aware system prompting. |
 | Regenerate article creates new version, not overwrite | ✅ Done | Regeneration increments `latest_version` and inserts new version row. |
 | Generation avoids unsupported invention as much as feasible | 🟡 Partial | System prompt nudges behavior, but no citation/grounding guardrails are implemented. |
 

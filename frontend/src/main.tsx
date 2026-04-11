@@ -49,6 +49,13 @@ type Job = {
   error?: string;
   created_at: string;
 };
+type ItemTransition = {
+  id: number;
+  from_status: string;
+  to_status: string;
+  message: string;
+  created_at: string;
+};
 
 type Collection = { id: number; name: string };
 
@@ -279,6 +286,11 @@ function Reader() {
     mutationFn: async () => api.post(`/articles/${id}/regenerate`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['article', id] }),
   });
+  const timeline = useQuery({
+    queryKey: ['item-timeline', detail.data?.id, detail.data?.video_item_id],
+    queryFn: async () => (await api.get(`/items/${detail.data?.video_item_id}/timeline`)).data as ItemTransition[],
+    enabled: Boolean(detail.data?.video_item_id),
+  });
 
   const version = useMemo(() => {
     const versions = detail.data?.versions ?? [];
@@ -314,6 +326,17 @@ function Reader() {
 
       <article className='card reader'>
         <pre>{version?.body ?? 'No content available.'}</pre>
+      </article>
+      <article className='card'>
+        <h3>Processing timeline</h3>
+        <ul className='stack'>
+          {(timeline.data ?? []).map((t) => (
+            <li key={t.id}>
+              <strong>{t.to_status}</strong> <span className='muted'>{new Date(t.created_at).toLocaleString()}</span>
+              {t.message ? <div className='muted'>{t.message}</div> : null}
+            </li>
+          ))}
+        </ul>
       </article>
     </Page>
   );

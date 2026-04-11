@@ -109,6 +109,8 @@ class Transcript(Base):
     strategy: Mapped[str] = mapped_column(String(50), default="transcript_first")
     fallback_used: Mapped[bool] = mapped_column(Boolean, default=False)
     transcription_model: Mapped[str] = mapped_column(String(100), default="")
+    transcription_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    audio_retained_path: Mapped[str] = mapped_column(String(500), default="")
     error_message: Mapped[str] = mapped_column(Text, default="")
     fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -183,5 +185,15 @@ class LogEvent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     severity: Mapped[str] = mapped_column(String(20), default="INFO")
     context: Mapped[str] = mapped_column(String(100), default="")
+    message: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ItemStatusTransition(Base):
+    __tablename__ = "item_status_transitions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    video_item_id: Mapped[int] = mapped_column(ForeignKey("video_items.id"))
+    from_status: Mapped[str] = mapped_column(String(50), default="")
+    to_status: Mapped[str] = mapped_column(String(50))
     message: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
