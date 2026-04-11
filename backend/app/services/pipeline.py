@@ -1,39 +1,93 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 
-from app.models.entities import AppSetting, Article, ArticleVersion, ItemStatus, Job, Source, Transcript, VideoItem
+from app.models.entities import (
+    AppSetting,
+    Article,
+    ArticleVersion,
+    ItemStatus,
+    Job,
+    JobItem,
+    ReadingProgress,
+    RefreshRun,
+    Source,
+    Transcript,
+    VideoItem,
+)
 from app.services.generation import ProviderConfig, generate_article, render_prompt
 from app.services.transcript import fetch_transcript, should_fallback_to_transcription, transcribe_audio_locally
 from app.services.youtube import discover_videos, evaluate_video_policy
 
 
+def _get_setting(db, key: str, default: str = "") -> str:
+    row = db.execute(select(AppSetting).where(AppSetting.key == key)).scalar_one_or_none()
+    return row.value if row and row.value is not None else default
+
+
 def refresh_source(db, source_id: int):
     source = db.get(Source, source_id)
+    run = RefreshRun(source_id=source_id, status="running", summary="")
+    db.add(run)
+    db.flush()
+
+    fetched_count = 0
+    filtered_count = 0
+    enqueued_count = 0
+    duplicate_count = 0
+    failed_count = 0
+
     try:
         videos = discover_videos(source)
-    except NotImplementedError as exc:
+        fetched_count = len(videos)
+    except Exception as exc:
         db.add(Job(type="refresh_source", status="failed", source_id=source_id, error=str(exc)))
         source.failure_count += 1
         source.last_scan_at = datetime.utcnow()
+        source.next_run_at = datetime.utcnow() + timedelta(minutes=min(240, max(10, source.cadence_minutes * (2 ** source.failure_count))))
+        run.status = "failed"
+        run.finished_at = datetime.utcnow()
+        run.summary = f"error={exc}"
         db.commit()
         return
 
     for raw in videos:
         allowed, reason = evaluate_video_policy(raw, source)
         if not allowed:
-            item = VideoItem(source_id=source_id, video_id=raw["video_id"], url=raw["url"], title=raw["title"], status=ItemStatus.skipped_by_policy, status_message=reason)
+            filtered_count += 1
+            item = VideoItem(
+                source_id=source_id,
+                video_id=raw["video_id"],
+                url=raw["url"],
+                title=raw["title"],
+                status=ItemStatus.skipped_by_policy,
+                status_message=reason,
+            )
             db.merge(item)
             continue
         exists = db.execute(select(VideoItem).where(VideoItem.source_id == source_id, VideoItem.video_id == raw["video_id"])).scalar_one_or_none()
         if exists:
+            duplicate_count += 1
             continue
         item = VideoItem(source_id=source_id, video_id=raw["video_id"], url=raw["url"], title=raw["title"], status=ItemStatus.queued)
         db.add(item)
         db.flush()
-        process_video_item(db, item.id)
+        enqueued_count += 1
+        try:
+            process_video_item(db, item.id)
+        except Exception:
+            failed_count += 1
+
     source.last_scan_at = datetime.utcnow()
     source.last_success_at = datetime.utcnow()
+    source.failure_count = 0
+    source.next_run_at = datetime.utcnow() + timedelta(minutes=source.cadence_minutes)
+    run.status = "done"
+    run.finished_at = datetime.utcnow()
+    run.summary = (
+        f"fetched={fetched_count};filtered={filtered_count};"
+        f"enqueued={enqueued_count};duplicates={duplicate_count};failed={failed_count}"
+    )
     db.commit()
 
 
@@ -42,45 +96,68 @@ def process_video_item(db, item_id: int):
 
     try:
         item.status = ItemStatus.transcript_searching
-        text, source_kind = fetch_transcript(item.url, ["en"])
+        language_pref = _get_setting(db, "transcript_languages", "en")
+        languages = [lang.strip() for lang in language_pref.split(",") if lang.strip()] or ["en"]
+        text, source_kind = fetch_transcript(item.url, languages)
 
-        if not text and should_fallback_to_transcription("transcript_first", False, True):
+        source = db.get(Source, item.source_id)
+        strategy = source.transcript_strategy if source else "transcript_first"
+        fallback_enabled = source.fallback_enabled if source else True
+
+        if not text and should_fallback_to_transcription(strategy, False, fallback_enabled):
             item.status = ItemStatus.transcription_started
-            yt_dlp_setting = db.execute(select(AppSetting).where(AppSetting.key == "yt_dlp_path")).scalar_one_or_none()
-            yt_dlp_command = yt_dlp_setting.value.strip() if yt_dlp_setting and yt_dlp_setting.value else "yt-dlp"
+            yt_dlp_command = _get_setting(db, "yt_dlp_path", "yt-dlp").strip() or "yt-dlp"
             text = transcribe_audio_locally(item.url, yt_dlp_command=yt_dlp_command)
             source_kind = "local_transcription"
             item.status = ItemStatus.transcription_completed
-        else:
+        elif text:
             item.status = ItemStatus.transcript_found
+        else:
+            item.status = ItemStatus.transcript_unavailable
 
         transcript = db.execute(select(Transcript).where(Transcript.video_item_id == item.id)).scalar_one_or_none()
         if transcript:
             transcript.text = text
             transcript.source = source_kind
+            transcript.language = languages[0]
         else:
-            db.add(Transcript(video_item_id=item.id, text=text, source=source_kind))
+            db.add(Transcript(video_item_id=item.id, text=text, source=source_kind, language=languages[0]))
 
         item.status = ItemStatus.generation_started
-        prompt = render_prompt("Convert to {{mode}} article\n{{transcript}}", text, "detailed")
-        body = generate_article(text, prompt, ProviderConfig(provider="openai", model="gpt-4.1-mini"))
+        provider_name = _get_setting(db, "generation_provider", "openai")
+        model_name = _get_setting(db, "generation_model", "gpt-4.1-mini")
+        mode_name = _get_setting(db, "generation_mode", "detailed")
+        global_template = _get_setting(db, "global_prompt_template", "Convert to {{mode}} article\n{{transcript}}")
+        prompt_template = source.prompt_override if source and source.prompt_override else global_template
+        prompt = render_prompt(prompt_template, text, mode_name)
+        body = generate_article(text, prompt, ProviderConfig(provider=provider_name, model=model_name))
 
         article = db.execute(select(Article).where(Article.video_item_id == item.id)).scalar_one_or_none()
         if not article:
-            article = Article(video_item_id=item.id, title=item.title)
+            article = Article(video_item_id=item.id, title=item.title, latest_version=1)
             db.add(article)
             db.flush()
+            db.add(ReadingProgress(article_id=article.id, position=0, total=0))
             version_num = 1
         else:
             version_num = article.latest_version + 1
             article.latest_version = version_num
 
-        db.add(ArticleVersion(article_id=article.id, version=version_num, mode="detailed", prompt_snapshot=prompt, body=body))
+        db.add(ArticleVersion(article_id=article.id, version=version_num, mode=mode_name, prompt_snapshot=prompt, body=body))
         item.status = ItemStatus.published
-        db.add(Job(type="process_item", status="done", video_item_id=item.id, source_id=item.source_id))
+
+        job = Job(type="process_item", status="done", video_item_id=item.id, source_id=item.source_id)
+        db.add(job)
+        db.flush()
+        db.add(JobItem(job_id=job.id, video_item_id=item.id, status="done"))
     except Exception as exc:
         item.status = ItemStatus.failed
         item.status_message = str(exc)
-        db.add(Job(type="process_item", status="failed", video_item_id=item.id, source_id=item.source_id, error=str(exc)))
+        job = Job(type="process_item", status="failed", video_item_id=item.id, source_id=item.source_id, error=str(exc))
+        db.add(job)
+        db.flush()
+        db.add(JobItem(job_id=job.id, video_item_id=item.id, status="failed", error=str(exc)))
+        db.commit()
+        raise
 
     db.commit()
