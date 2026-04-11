@@ -38,6 +38,9 @@ main { padding: 1.5rem; }
 .stack { display: grid; gap: .75rem; padding-left: 1rem; }
 .row { display: flex; flex-wrap: wrap; gap: .8rem; align-items: end; }
 .space-between { justify-content: space-between; }
+.thumb { width: 100%; max-height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: .5rem; }
+.badge { font-size: .75rem; padding: .15rem .35rem; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; }
+.linkish { background: transparent; border: none; color: #8ecbff; padding: 0; }
 
 .card {
   background: rgba(21, 29, 61, .72);
@@ -70,6 +73,15 @@ button:disabled { opacity: .6; cursor: default; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; border-bottom: 1px solid rgba(255, 255, 255, .08); padding: .55rem .3rem; }
 .reader pre { white-space: pre-wrap; line-height: 1.5; font-family: inherit; margin: 0; }
+.reader { margin-top: 1rem; }
+.reader .tabs { display: flex; gap: .5rem; margin-bottom: .7rem; }
+.reader .tabs button.active { outline: 2px solid #8ecbff; }
+.reader .reader-scroll { max-height: 60vh; overflow: auto; }
+.reader-light { background: #f7f7f3; color: #1d1f24; }
+.reader-sepia { background: #f3e8d1; color: #3f3221; }
+.reader-dark { background: rgba(21, 29, 61, .72); color: #e6e9ef; }
+.reader-font-serif { font-family: Georgia, 'Times New Roman', serif; }
+.reader-font-sans { font-family: Inter, system-ui, sans-serif; }
 
 @media (max-width: 820px) {
   .layout { grid-template-columns: 1fr; }

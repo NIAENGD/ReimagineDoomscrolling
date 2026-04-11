@@ -1,4 +1,4 @@
-import React, { FormEvent, useMemo, useState } from 'react';
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import {
   BrowserRouter,
@@ -6,6 +6,7 @@ import {
   NavLink,
   Route,
   Routes,
+  useNavigate,
   useParams,
   useSearchParams,
 } from 'react-router-dom';
@@ -32,32 +33,36 @@ type Source = {
   failure_count: number;
 };
 
+type Collection = { id: number; name: string };
+
 type LibraryItem = {
   article_id: number;
   title: string;
   version: number;
   body_preview: string;
   video_item_id: number;
+  source_title: string;
+  source_id: number;
+  thumbnail_url: string;
+  transcript_source: string;
+  is_read: boolean;
+  collections: Collection[];
+  reading_progress: { position: number; total: number };
 };
 
 type Job = {
   id: number;
   type: string;
   status: string;
-  source_id?: number;
-  video_item_id?: number;
-  error?: string;
   created_at: string;
 };
+
 type ItemTransition = {
   id: number;
-  from_status: string;
   to_status: string;
   message: string;
   created_at: string;
 };
-
-type Collection = { id: number; name: string };
 
 function Page({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -68,38 +73,40 @@ function Page({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <article className='card stat'>
-      <p className='label'>{label}</p>
-      <p className='value'>{value}</p>
-    </article>
-  );
-}
-
 function Home() {
   const sources = useQuery({ queryKey: ['sources'], queryFn: async () => (await api.get('/sources')).data as Source[] });
   const jobs = useQuery({ queryKey: ['jobs'], queryFn: async () => (await api.get('/jobs')).data as Job[] });
-  const library = useQuery({ queryKey: ['library', ''], queryFn: async () => (await api.get('/library')).data as LibraryItem[] });
+  const library = useQuery({ queryKey: ['library-home'], queryFn: async () => (await api.get('/library')).data as LibraryItem[] });
+  const scheduler = useQuery({ queryKey: ['scheduler'], queryFn: async () => (await api.get('/scheduler/status')).data });
 
-  const failedJobs = (jobs.data ?? []).filter((j) => j.status.includes('fail')).length;
+  const activeSources = (sources.data ?? []).filter((s) => s.state === 'enabled').length;
+  const unreadCount = (library.data ?? []).filter((a) => !a.is_read).length;
+  const continueReading = (library.data ?? []).find((a) => (a.reading_progress.total || 0) > 0 && (a.reading_progress.position || 0) > 0 && !a.is_read);
 
   return (
     <Page title='Dashboard'>
       <div className='grid'>
-        <StatCard label='Sources' value={sources.data?.length ?? 0} />
-        <StatCard label='Articles' value={library.data?.length ?? 0} />
-        <StatCard label='Jobs queued / running' value={(jobs.data ?? []).filter((j) => ['queued', 'running'].includes(j.status)).length} />
-        <StatCard label='Failed jobs' value={failedJobs} />
+        <article className='card stat'><p className='label'>Sources</p><p className='value'>{sources.data?.length ?? 0}</p></article>
+        <article className='card stat'><p className='label'>Active sources</p><p className='value'>{activeSources}</p></article>
+        <article className='card stat'><p className='label'>Unread</p><p className='value'>{unreadCount}</p></article>
+        <article className='card stat'><p className='label'>Scheduler</p><p className='value'>{String(scheduler.data?.enabled ?? false)}</p></article>
       </div>
+      {continueReading ? (
+        <article className='card'>
+          <h2>Continue reading</h2>
+          <p><Link to={`/reader/${continueReading.article_id}`}>{continueReading.title}</Link> · {continueReading.source_title}</p>
+        </article>
+      ) : null}
       <article className='card'>
-        <h2>Recent articles</h2>
+        <h2>Latest articles</h2>
         <ul className='stack'>
-          {(library.data ?? []).slice(0, 6).map((item) => (
-            <li key={item.article_id}>
-              <Link to={`/reader/${item.article_id}`}>{item.title}</Link>
-            </li>
-          ))}
+          {(library.data ?? []).slice(0, 6).map((item) => <li key={item.article_id}><Link to={`/reader/${item.article_id}`}>{item.title}</Link></li>)}
+        </ul>
+      </article>
+      <article className='card'>
+        <h2>Recent jobs</h2>
+        <ul className='stack'>
+          {(jobs.data ?? []).slice(0, 6).map((j) => <li key={j.id}>#{j.id} {j.type} · <span className='muted'>{j.status}</span></li>)}
         </ul>
       </article>
     </Page>
@@ -107,86 +114,35 @@ function Home() {
 }
 
 function Sources() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const sources = useQuery({ queryKey: ['sources'], queryFn: async () => (await api.get('/sources')).data as Source[] });
-
   const createSource = useMutation({
     mutationFn: async () => api.post('/sources', { title, url }),
-    onSuccess: () => {
-      setTitle('');
-      setUrl('');
-      queryClient.invalidateQueries({ queryKey: ['sources'] });
-    },
+    onSuccess: () => { setTitle(''); setUrl(''); queryClient.invalidateQueries({ queryKey: ['sources'] }); },
   });
-
-  const updateSource = useMutation({
-    mutationFn: async ({ id, payload }: { id: number; payload: Partial<Source> }) => api.patch(`/sources/${id}`, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sources'] }),
-  });
-
-  const refreshSource = useMutation({
-    mutationFn: async (id: number) => api.post(`/sources/${id}/refresh`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['jobs'] }),
-  });
-
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!url.trim()) return;
-    createSource.mutate();
-  };
+  const updateSource = useMutation({ mutationFn: async ({ id, payload }: { id: number; payload: Partial<Source> }) => api.patch(`/sources/${id}`, payload), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sources'] }) });
 
   return (
     <Page title='Sources'>
       <article className='card'>
         <h2>Add source</h2>
-        <form className='row' onSubmit={onSubmit}>
+        <form className='row' onSubmit={(e: FormEvent) => { e.preventDefault(); if (url.trim()) createSource.mutate(); }}>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder='Display title (optional)' />
           <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder='YouTube channel URL' required />
-          <button disabled={createSource.isPending}>{createSource.isPending ? 'Adding...' : 'Add source'}</button>
+          <button>Add source</button>
         </form>
       </article>
-
       <div className='stack'>
         {(sources.data ?? []).map((src) => (
           <article className='card' key={src.id}>
-            <h3>{src.title || src.url}</h3>
+            <h3><button className='linkish' onClick={() => navigate(`/sources/${src.id}`)}>{src.title || src.url}</button></h3>
             <p className='muted'>{src.url}</p>
             <div className='row'>
-              <label>
-                State
-                <select
-                  value={src.state}
-                  onChange={(e) => updateSource.mutate({ id: src.id, payload: { state: e.target.value } })}
-                >
-                  <option value='enabled'>Enabled</option>
-                  <option value='paused'>Paused</option>
-                  <option value='archived'>Archived</option>
-                </select>
-              </label>
-              <label>
-                Cadence (min)
-                <input
-                  type='number'
-                  min={5}
-                  defaultValue={src.cadence_minutes}
-                  onBlur={(e) => updateSource.mutate({ id: src.id, payload: { cadence_minutes: Number(e.target.value) } })}
-                />
-              </label>
-              <label>
-                Max videos
-                <input
-                  type='number'
-                  min={1}
-                  defaultValue={src.max_videos}
-                  onBlur={(e) => updateSource.mutate({ id: src.id, payload: { max_videos: Number(e.target.value) } })}
-                />
-              </label>
-            </div>
-            <div className='row space-between'>
-              <p className='muted'>Failures: {src.failure_count}</p>
-              <button onClick={() => refreshSource.mutate(src.id)}>Refresh now</button>
+              <label>State <select value={src.state} onChange={(e) => updateSource.mutate({ id: src.id, payload: { state: e.target.value } })}><option value='enabled'>Enabled</option><option value='paused'>Paused</option><option value='archived'>Archived</option></select></label>
+              <label>Cadence <input type='number' defaultValue={src.cadence_minutes} onBlur={(e) => updateSource.mutate({ id: src.id, payload: { cadence_minutes: Number(e.target.value) } })} /></label>
             </div>
           </article>
         ))}
@@ -195,78 +151,73 @@ function Sources() {
   );
 }
 
-function Jobs() {
-  const queryClient = useQueryClient();
-  const jobs = useQuery({ queryKey: ['jobs'], queryFn: async () => (await api.get('/jobs')).data as Job[] });
-
-  const retry = useMutation({
-    mutationFn: async (id: number) => api.post(`/jobs/${id}/retry`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['jobs'] }),
-  });
-
-  return (
-    <Page title='Jobs'>
-      <article className='card'>
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Type</th>
-              <th>Status</th>
-              <th>Created</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(jobs.data ?? []).map((job) => (
-              <tr key={job.id}>
-                <td>{job.id}</td>
-                <td>{job.type}</td>
-                <td>{job.status}</td>
-                <td>{new Date(job.created_at).toLocaleString()}</td>
-                <td>
-                  {job.status.includes('fail') ? (
-                    <button onClick={() => retry.mutate(job.id)} disabled={retry.isPending}>Retry</button>
-                  ) : (
-                    <span className='muted'>—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </article>
-    </Page>
-  );
+function SourceDetail() {
+  const { id } = useParams();
+  const source = useQuery({ queryKey: ['sources'], queryFn: async () => (await api.get('/sources')).data as Source[] });
+  const refresh = useMutation({ mutationFn: async () => api.post(`/sources/${id}/refresh`) });
+  const src = (source.data ?? []).find((s) => String(s.id) === id);
+  return <Page title='Source detail'><article className='card'><h2>{src?.title ?? 'Missing source'}</h2><p>{src?.url}</p><button onClick={() => refresh.mutate()}>Refresh now</button></article></Page>;
 }
 
 function Library() {
   const [params, setParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const q = params.get('q') ?? '';
+  const source = params.get('source') ?? '';
+  const read_state = params.get('read_state') ?? '';
+  const sort_by = params.get('sort_by') ?? 'import_time';
+  const view = params.get('view') ?? 'grid';
+  const collection_id = params.get('collection_id') ?? '';
+  const group_by_source = params.get('group_by_source') === 'true';
+
+  const collections = useQuery({ queryKey: ['collections'], queryFn: async () => (await api.get('/collections')).data as Collection[] });
   const library = useQuery({
-    queryKey: ['library', q],
-    queryFn: async () => (await api.get('/library', { params: q ? { q } : {} })).data as LibraryItem[],
+    queryKey: ['library', q, source, read_state, sort_by, collection_id, group_by_source],
+    queryFn: async () => (await api.get('/library', { params: { q, source, read_state, sort_by, collection_id: collection_id || undefined, group_by_source } })).data,
   });
+  const grouped = Array.isArray(library.data) && library.data.length > 0 && 'items' in library.data[0];
+  const entries: LibraryItem[] = grouped ? (library.data as any[]).flatMap((g) => g.items) : ((library.data ?? []) as LibraryItem[]);
+
+  const markRead = useMutation({ mutationFn: async ({ articleId, isRead }: { articleId: number; isRead: boolean }) => api.post(`/articles/${articleId}/read-state`, { is_read: isRead }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['library'] }) });
+  const addToCollection = useMutation({ mutationFn: async ({ articleId, collectionId }: { articleId: number; collectionId: number }) => api.post(`/collections/${collectionId}/articles/${articleId}`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['library'] }) });
+
+  const set = (k: string, v: string) => { const next = Object.fromEntries(params.entries()); if (v) next[k] = v; else delete next[k]; setParams(next); };
+
+  const cards = (items: LibraryItem[]) => (
+    <div className={view === 'list' ? 'stack' : 'grid'}>
+      {items.map((item) => (
+        <article key={item.article_id} className='card'>
+          {item.thumbnail_url ? <img className='thumb' src={item.thumbnail_url} alt={item.title} /> : null}
+          <h3>{item.title}</h3>
+          <p className='muted'>{item.source_title} · v{item.version} · <span className='badge'>{item.transcript_source || 'unknown transcript'}</span></p>
+          <p>{item.body_preview || 'No preview available.'}</p>
+          <div className='row'>
+            <Link to={`/reader/${item.article_id}`}>Open reader</Link>
+            <button onClick={() => markRead.mutate({ articleId: item.article_id, isRead: !item.is_read })}>{item.is_read ? 'Mark unread' : 'Mark read'}</button>
+            <select defaultValue='' onChange={(e) => e.target.value && addToCollection.mutate({ articleId: item.article_id, collectionId: Number(e.target.value) })}>
+              <option value=''>Add to collection</option>
+              {(collections.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
 
   return (
     <Page title='Library'>
-      <article className='card'>
-        <input
-          placeholder='Search by title...'
-          defaultValue={q}
-          onChange={(e) => setParams(e.target.value ? { q: e.target.value } : {})}
-        />
+      <article className='card row'>
+        <input placeholder='Search title/body/source' defaultValue={q} onChange={(e) => set('q', e.target.value)} />
+        <select value={read_state} onChange={(e) => set('read_state', e.target.value)}><option value=''>All</option><option value='unread'>Unread</option><option value='read'>Read</option></select>
+        <select value={sort_by} onChange={(e) => set('sort_by', e.target.value)}><option value='import_time'>Import</option><option value='publish_time'>Publish</option><option value='source'>Source</option><option value='title'>Title</option></select>
+        <input placeholder='Source filter' defaultValue={source} onChange={(e) => set('source', e.target.value)} />
+        <select value={collection_id} onChange={(e) => set('collection_id', e.target.value)}><option value=''>All collections</option>{(collections.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <select value={view} onChange={(e) => set('view', e.target.value)}><option value='grid'>Grid</option><option value='list'>List</option></select>
+        <label><input type='checkbox' checked={group_by_source} onChange={(e) => set('group_by_source', e.target.checked ? 'true' : '')} /> Group by source</label>
       </article>
-      <div className='grid'>
-        {(library.data ?? []).map((item) => (
-          <article key={item.article_id} className='card'>
-            <h3>{item.title}</h3>
-            <p className='muted'>Version {item.version}</p>
-            <p>{item.body_preview || 'No preview available.'}</p>
-            <Link to={`/reader/${item.article_id}`}>Open reader</Link>
-          </article>
-        ))}
-      </div>
+      {grouped
+        ? (library.data as any[]).map((group) => <section key={group.source_title}><h2>{group.source_title}</h2>{cards(group.items)}</section>)
+        : cards(entries)}
     </Page>
   );
 }
@@ -274,23 +225,18 @@ function Library() {
 function Reader() {
   const { id } = useParams();
   const queryClient = useQueryClient();
+  const articleRef = useRef<HTMLDivElement | null>(null);
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
+  const [tab, setTab] = useState<'article' | 'transcript'>('article');
 
-  const detail = useQuery({
-    queryKey: ['article', id],
-    queryFn: async () => (await api.get(`/articles/${id}`)).data,
-    enabled: Boolean(id),
-  });
+  const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
+  const detail = useQuery({ queryKey: ['article', id], queryFn: async () => (await api.get(`/articles/${id}`)).data, enabled: Boolean(id) });
+  const transcript = useQuery({ queryKey: ['transcript', detail.data?.video_item_id], queryFn: async () => (await api.get(`/transcripts/${detail.data?.video_item_id}`)).data, enabled: Boolean(detail.data?.video_item_id) });
+  const timeline = useQuery({ queryKey: ['item-timeline', detail.data?.video_item_id], queryFn: async () => (await api.get(`/items/${detail.data?.video_item_id}/timeline`)).data as ItemTransition[], enabled: Boolean(detail.data?.video_item_id) });
 
-  const regenerate = useMutation({
-    mutationFn: async () => api.post(`/articles/${id}/regenerate`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['article', id] }),
-  });
-  const timeline = useQuery({
-    queryKey: ['item-timeline', detail.data?.id, detail.data?.video_item_id],
-    queryFn: async () => (await api.get(`/items/${detail.data?.video_item_id}/timeline`)).data as ItemTransition[],
-    enabled: Boolean(detail.data?.video_item_id),
-  });
+  const regenerate = useMutation({ mutationFn: async () => api.post(`/articles/${id}/regenerate`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['article', id] }) });
+  const markRead = useMutation({ mutationFn: async (isRead: boolean) => api.post(`/articles/${id}/read-state`, { is_read: isRead }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['article', id] }) });
+  const saveProgress = useMutation({ mutationFn: async (payload: { position: number; total: number }) => api.post(`/articles/${id}/progress`, payload) });
 
   const version = useMemo(() => {
     const versions = detail.data?.versions ?? [];
@@ -299,45 +245,76 @@ function Reader() {
     return versions[0];
   }, [detail.data, selectedVersion]);
 
+  const body = version?.body ?? '';
+  const words = body.trim().split(/\s+/).filter(Boolean).length;
+  const estMinutes = Math.max(1, Math.round(words / 220));
+  const headings = body.split('\n').filter((l: string) => /^#{1,3}\s+/.test(l));
+
+  useEffect(() => {
+    const el = articleRef.current;
+    if (!el || !id) return;
+    const onScroll = () => {
+      const total = Math.max(1, el.scrollHeight - el.clientHeight);
+      saveProgress.mutate({ position: Math.round(el.scrollTop), total });
+    };
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [id]);
+
+  const readerTheme = settings.data?.reader_default_theme || 'dark';
+  const readerFont = settings.data?.reader_font_family || 'sans';
+  const readerFontSize = Number(settings.data?.reader_font_size || 17);
+  const readerWidth = Number(settings.data?.reader_line_width || 72);
+
   return (
     <Page title='Reader'>
       <article className='card'>
         <h2>{detail.data?.title ?? 'Loading...'}</h2>
-        <div className='row space-between'>
-          <label>
-            Version
-            <select
-              value={version?.version ?? ''}
-              onChange={(e) => setSelectedVersion(Number(e.target.value))}
-              disabled={!detail.data?.versions?.length}
-            >
-              {(detail.data?.versions ?? []).map((v: any) => (
-                <option key={v.version} value={v.version}>
-                  v{v.version}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button onClick={() => regenerate.mutate()} disabled={regenerate.isPending}>
-            {regenerate.isPending ? 'Regenerating...' : 'Regenerate article'}
-          </button>
+        <p className='muted'>{detail.data?.source_title} · {detail.data?.source_url}</p>
+        <div className='row'>
+          <label>Version <select value={version?.version ?? ''} onChange={(e) => setSelectedVersion(Number(e.target.value))}>{(detail.data?.versions ?? []).map((v: any) => <option key={v.version} value={v.version}>v{v.version}</option>)}</select></label>
+          <button onClick={() => regenerate.mutate()}>Regenerate</button>
+          <button onClick={() => markRead.mutate(!detail.data?.is_read)}>{detail.data?.is_read ? 'Mark unread' : 'Mark read'}</button>
+          <button onClick={() => navigator.clipboard.writeText(body)}>Copy</button>
+          <span className='muted'>~{estMinutes} min read</span>
         </div>
+        {!!headings.length && <details><summary>Headings</summary><ul>{headings.map((h, i) => <li key={i}>{h.replace(/^#{1,3}\s+/, '')}</li>)}</ul></details>}
       </article>
 
-      <article className='card reader'>
-        <pre>{version?.body ?? 'No content available.'}</pre>
+      <article className={`card reader reader-${readerTheme} reader-font-${readerFont}`} style={{ fontSize: `${readerFontSize}px`, maxWidth: `${readerWidth}ch` }}>
+        <div className='tabs'><button className={tab === 'article' ? 'active' : ''} onClick={() => setTab('article')}>Article</button><button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>Transcript</button></div>
+        <div ref={articleRef} className='reader-scroll'>
+          {tab === 'article' ? <pre>{body || 'No content available.'}</pre> : <pre>{transcript.data?.text || 'Transcript unavailable.'}</pre>}
+        </div>
       </article>
-      <article className='card'>
-        <h3>Processing timeline</h3>
-        <ul className='stack'>
-          {(timeline.data ?? []).map((t) => (
-            <li key={t.id}>
-              <strong>{t.to_status}</strong> <span className='muted'>{new Date(t.created_at).toLocaleString()}</span>
-              {t.message ? <div className='muted'>{t.message}</div> : null}
-            </li>
-          ))}
-        </ul>
+      <article className='card'><h3>Processing timeline</h3><ul className='stack'>{(timeline.data ?? []).map((t) => <li key={t.id}><strong>{t.to_status}</strong> <span className='muted'>{new Date(t.created_at).toLocaleString()}</span>{t.message ? <div className='muted'>{t.message}</div> : null}</li>)}</ul></article>
+    </Page>
+  );
+}
+
+function CollectionsPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState('');
+  const collections = useQuery({ queryKey: ['collections'], queryFn: async () => (await api.get('/collections')).data as Collection[] });
+  const detail = useQuery({ queryKey: ['collection', id], queryFn: async () => (await api.get(`/collections/${id}`)).data, enabled: Boolean(id) });
+
+  const create = useMutation({ mutationFn: async () => api.post('/collections', { name }), onSuccess: () => { setName(''); queryClient.invalidateQueries({ queryKey: ['collections'] }); } });
+  const rename = useMutation({ mutationFn: async () => api.patch(`/collections/${id}`, { name }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['collection', id] }) });
+  const del = useMutation({ mutationFn: async () => api.delete(`/collections/${id}`), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['collections'] }); navigate('/collections'); } });
+  const remove = useMutation({ mutationFn: async (articleId: number) => api.delete(`/collections/${id}/articles/${articleId}`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['collection', id] }) });
+
+  return (
+    <Page title='Collections'>
+      <article className='card row'>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder='Collection name' />
+        <button onClick={() => create.mutate()} disabled={!name.trim()}>Create collection</button>
       </article>
+      <div className='grid'>
+        {(collections.data ?? []).map((c) => <article className='card' key={c.id}><h3>{c.name}</h3><button onClick={() => navigate(`/collections/${c.id}`)}>Open</button></article>)}
+      </div>
+      {id && detail.data ? <article className='card'><h2>{detail.data.name}</h2><div className='row'><input value={name} onChange={(e) => setName(e.target.value)} placeholder='New name' /><button onClick={() => rename.mutate()}>Rename</button><button onClick={() => del.mutate()}>Delete</button></div><ul className='stack'>{(detail.data.articles ?? []).map((a: any) => <li key={a.article_id}>{a.title} <button onClick={() => remove.mutate(a.article_id)}>Remove</button></li>)}</ul></article> : null}
     </Page>
   );
 }
@@ -345,144 +322,46 @@ function Reader() {
 function Settings() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const settingsTemplate = useMemo(
-    () => ({
-      ffmpeg_path: '',
-      yt_dlp_path: '',
-      openai_api_key: '',
-      openai_base_url: 'https://api.openai.com/v1',
-      lmstudio_base_url: 'http://localhost:1234/v1',
-    }),
-    [],
-  );
+  const settingsTemplate = useMemo(() => ({
+    timezone: 'UTC', ui_theme_default: 'dark',
+    source_default_discovery_mode: 'latest_n', source_default_max_videos: '10', source_default_rolling_window_hours: '72', source_default_skip_shorts: 'true', source_default_min_duration_seconds: '180', source_default_dedup_policy: 'source_video_id',
+    transcript_languages: 'en', transcript_first: 'true', transcript_fallback_enabled: 'true', whisper_model_size: 'base', transcription_cpu_threads: '4', transcription_language_hint: '',
+    generation_provider: 'openai', generation_model: 'gpt-4.1-mini', generation_mode: 'detailed', generation_temperature: '0.2', generation_timeout_seconds: '60', generation_max_tokens: '1200', openai_api_key: '', openai_base_url: 'https://api.openai.com/v1', lmstudio_base_url: 'http://localhost:1234/v1',
+    reader_default_theme: 'dark', reader_font_family: 'sans', reader_font_size: '17', reader_line_width: '72',
+    scheduler_enabled: 'true', scheduler_default_cadence_minutes: '60', scheduler_concurrency_cap: '2',
+  }), []);
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
-
-  const save = useMutation({
-    mutationFn: async (payload: Record<string, string>) => api.put('/settings', payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
-  });
+  const save = useMutation({ mutationFn: async (payload: Record<string, string>) => api.put('/settings', payload), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }) });
 
   const merged = { ...settingsTemplate, ...(settings.data ?? {}), ...draft };
 
-  return (
-    <Page title='Settings'>
-      <article className='card'>
-        <p className='muted'>
-          If diagnostics shows <code>ffmpeg: false</code>, set <code>ffmpeg_path</code> to your executable path (for example,
-          <code> C:\ffmpeg\bin\ffmpeg.exe</code>) and save.
-        </p>
-        <div className='stack'>
-          {Object.entries(merged).map(([k, v]) => (
-            <label key={k}>
-              {k}
-              <input value={v} onChange={(e) => setDraft((prev) => ({ ...prev, [k]: e.target.value }))} />
-            </label>
-          ))}
-        </div>
-        <button onClick={() => save.mutate(merged)} disabled={save.isPending}>Save settings</button>
-      </article>
-    </Page>
-  );
+  return <Page title='Settings'><article className='card'><div className='grid'>{Object.entries(merged).map(([k, v]) => <label key={k}>{k}<input value={v} onChange={(e) => setDraft((p) => ({ ...p, [k]: e.target.value }))} /></label>)}</div><button onClick={() => save.mutate(merged)}>Save settings</button></article></Page>;
 }
 
 function Diagnostics() {
   const diag = useQuery({ queryKey: ['diagnostics'], queryFn: async () => (await api.get('/diagnostics')).data });
-  return (
-    <Page title='Diagnostics'>
-      <div className='grid'>
-        {Object.entries(diag.data ?? {}).map(([k, v]) => (
-          <article className='card stat' key={k}>
-            <p className='label'>{k}</p>
-            <p className='value'>{String(v)}</p>
-          </article>
-        ))}
-      </div>
-    </Page>
-  );
+  return <Page title='Diagnostics'><div className='grid'>{Object.entries(diag.data ?? {}).map(([k, v]) => <article className='card stat' key={k}><p className='label'>{k}</p><p className='value'>{String(v)}</p></article>)}</div></Page>;
 }
 
 function Logs() {
   const logs = useQuery({ queryKey: ['logs'], queryFn: async () => (await api.get('/logs')).data as Array<Record<string, any>> });
-  return (
-    <Page title='Logs'>
-      <article className='card'>
-        <ul className='stack'>
-          {(logs.data ?? []).map((l) => (
-            <li key={l.id}>
-              <strong>[{l.severity}]</strong> <span className='muted'>{new Date(l.created_at).toLocaleString()}</span>
-              <br />
-              {l.context}: {l.message}
-            </li>
-          ))}
-        </ul>
-      </article>
-    </Page>
-  );
-}
-
-function Collections() {
-  const queryClient = useQueryClient();
-  const [name, setName] = useState('');
-  const collections = useQuery({ queryKey: ['collections'], queryFn: async () => (await api.get('/collections')).data as Collection[] });
-
-  const create = useMutation({
-    mutationFn: async () => api.post('/collections', { name }),
-    onSuccess: () => {
-      setName('');
-      queryClient.invalidateQueries({ queryKey: ['collections'] });
-    },
-  });
-
-  return (
-    <Page title='Collections'>
-      <article className='card row'>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder='Collection name' />
-        <button onClick={() => create.mutate()} disabled={!name.trim() || create.isPending}>Create collection</button>
-      </article>
-
-      <div className='grid'>
-        {(collections.data ?? []).map((c) => (
-          <article className='card stat' key={c.id}>
-            <p className='label'>Collection</p>
-            <p className='value'>{c.name}</p>
-          </article>
-        ))}
-      </div>
-    </Page>
-  );
+  return <Page title='Logs'><article className='card'><ul className='stack'>{(logs.data ?? []).map((l) => <li key={l.id}><strong>[{l.severity}]</strong> <span className='muted'>{new Date(l.created_at).toLocaleString()}</span><br />{l.context}: {l.message}</li>)}</ul></article></Page>;
 }
 
 function Layout() {
-  const links = [
-    ['/', 'Home'],
-    ['/sources', 'Sources'],
-    ['/jobs', 'Jobs'],
-    ['/library', 'Library'],
-    ['/collections', 'Collections'],
-    ['/settings', 'Settings'],
-    ['/diagnostics', 'Diagnostics'],
-    ['/logs', 'Logs'],
-  ] as const;
-
+  const links = [['/', 'Home'], ['/sources', 'Sources'], ['/jobs', 'Jobs'], ['/library', 'Library'], ['/collections', 'Collections'], ['/settings', 'Settings'], ['/diagnostics', 'Diagnostics'], ['/logs', 'Logs']] as const;
   return (
     <div className='layout'>
-      <aside>
-        <h2>ReimagineDoomscrolling</h2>
-        <nav>
-          {links.map(([href, label]) => (
-            <NavLink key={href} to={href} className={({ isActive }) => (isActive ? 'active' : '')} end={href === '/'}>
-              {label}
-            </NavLink>
-          ))}
-        </nav>
-      </aside>
+      <aside><h2>ReimagineDoomscrolling</h2><nav>{links.map(([href, label]) => <NavLink key={href} to={href} className={({ isActive }) => (isActive ? 'active' : '')} end={href === '/'}>{label}</NavLink>)}</nav></aside>
       <main>
         <Routes>
           <Route path='/' element={<Home />} />
           <Route path='/sources' element={<Sources />} />
+          <Route path='/sources/:id' element={<SourceDetail />} />
           <Route path='/jobs' element={<Jobs />} />
           <Route path='/library' element={<Library />} />
-          <Route path='/collections' element={<Collections />} />
+          <Route path='/collections' element={<CollectionsPage />} />
+          <Route path='/collections/:id' element={<CollectionsPage />} />
           <Route path='/reader/:id' element={<Reader />} />
           <Route path='/settings' element={<Settings />} />
           <Route path='/diagnostics' element={<Diagnostics />} />
@@ -490,6 +369,17 @@ function Layout() {
         </Routes>
       </main>
     </div>
+  );
+}
+
+function Jobs() {
+  const queryClient = useQueryClient();
+  const jobs = useQuery({ queryKey: ['jobs'], queryFn: async () => (await api.get('/jobs')).data as Job[] });
+  const retry = useMutation({ mutationFn: async (id: number) => api.post(`/jobs/${id}/retry`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['jobs'] }) });
+  return (
+    <Page title='Jobs'>
+      <article className='card'><table><thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Created</th><th>Action</th></tr></thead><tbody>{(jobs.data ?? []).map((job) => <tr key={job.id}><td>{job.id}</td><td>{job.type}</td><td>{job.status}</td><td>{new Date(job.created_at).toLocaleString()}</td><td>{job.status.includes('fail') ? <button onClick={() => retry.mutate(job.id)}>Retry</button> : <span className='muted'>—</span>}</td></tr>)}</tbody></table></article>
+    </Page>
   );
 }
 
