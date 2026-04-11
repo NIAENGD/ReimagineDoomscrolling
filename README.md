@@ -449,10 +449,6 @@ Status key used below:
 
 | Task                                                         | Progress | Notes |
 | ------------------------------------------------------------ | -------- | ----- |
-| docker-compose provided | ❌ Not done | No docker-compose manifest found. |
-| Backend Dockerfile provided | ❌ Not done | No backend Dockerfile found. |
-| Frontend Dockerfile provided | ❌ Not done | No frontend Dockerfile found. |
-| .env.example provided | ❌ Not done | No `.env.example` file found at repository root. |
 | Migration commands documented | ✅ Done | Migration commands are documented in migration README. |
 | Seed or smoke-test fixtures provided | ❌ Not done | No explicit seed fixture pack beyond lightweight tests. |
 | Startup script or Makefile provided | ✅ Done | Windows startup/plan scripts are included. |
