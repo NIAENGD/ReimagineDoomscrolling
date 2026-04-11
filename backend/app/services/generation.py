@@ -65,9 +65,8 @@ def generate_article(transcript: str, prompt: str, cfg: ProviderConfig) -> str:
 
     provider = (cfg.provider or "openai").lower()
     if provider == "openai":
-        if not settings.openai_api_key:
-            if not cfg.openai_api_key:
-                raise ValueError("OPENAI_API_KEY is required when provider is openai")
+        if not (cfg.openai_api_key or settings.openai_api_key):
+            raise ValueError("OPENAI_API_KEY is required when provider is openai")
         return _chat_completion(
             base_url=cfg.openai_base_url or settings.openai_base_url,
             api_key=cfg.openai_api_key or settings.openai_api_key,

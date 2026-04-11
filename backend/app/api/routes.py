@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,11 +14,20 @@ from app.models.entities import (
     LogEvent,
     ReadingProgress,
     Source,
+    SourceState,
     Transcript,
     VideoItem,
 )
-from app.schemas.common import CollectionCreate, MarkReadPayload, ReadingProgressPayload, SettingsPatch
-from app.schemas.source import SourceCreate, SourceOut, SourcePatch
+from app.schemas.common import (
+    CollectionCreate,
+    DeletedResponse,
+    MarkReadPayload,
+    QueuedResponse,
+    ReadingProgressPayload,
+    SavedResponse,
+    SettingsPatch,
+)
+from app.schemas.source import SourceActionResponse, SourceCreate, SourceOut, SourcePatch
 from app.services.generation import ProviderConfig, generate_article, render_prompt
 from app.services.pipeline import process_video_item, refresh_source
 from app.services.youtube import normalize_source_url, resolve_source_identity
@@ -46,6 +55,12 @@ DEFAULT_APP_SETTINGS = {
     "global_prompt_template": "Convert to {{mode}} article\n{{transcript}}",
     "transcript_languages": "en",
     "retain_failed_audio": "false",
+    "delete_audio_after_success": "true",
+    "temp_cleanup_ttl_hours": "24",
+    "transcript_retention_days": "0",
+    "thumbnail_cache_ttl_days": "0",
+    "log_retention_days": "30",
+    "debug_logging": "false",
     "timezone": "UTC",
     "ui_theme_default": "dark",
     "source_default_discovery_mode": "latest_n",
@@ -83,12 +98,74 @@ def get_settings(db: Session = Depends(get_db)):
     return merged
 
 
-@router.put('/settings')
+@router.get('/settings/schema')
+def settings_schema():
+    return {
+        "general": ["timezone", "ui_theme_default"],
+        "sources": [
+            "source_default_discovery_mode",
+            "source_default_max_videos",
+            "source_default_rolling_window_hours",
+            "source_default_skip_shorts",
+            "source_default_min_duration_seconds",
+            "source_default_dedup_policy",
+        ],
+        "transcript": [
+            "transcript_languages",
+            "transcript_first",
+            "transcript_fallback_enabled",
+            "whisper_model_size",
+            "transcription_cpu_threads",
+            "transcription_language_hint",
+            "retain_failed_audio",
+            "delete_audio_after_success",
+        ],
+        "generation": [
+            "generation_provider",
+            "generation_model",
+            "generation_mode",
+            "generation_temperature",
+            "generation_timeout_seconds",
+            "generation_max_tokens",
+            "openai_api_key",
+            "openai_base_url",
+            "lmstudio_base_url",
+            "global_prompt_template",
+        ],
+        "scheduling": [
+            "scheduler_enabled",
+            "scheduler_default_cadence_minutes",
+            "scheduler_concurrency_cap",
+            "retry_default_max_attempts",
+            "retry_default_backoff_minutes",
+            "retry_default_backoff_multiplier",
+        ],
+        "storage": [
+            "temp_cleanup_ttl_hours",
+            "transcript_retention_days",
+            "thumbnail_cache_ttl_days",
+            "log_retention_days",
+        ],
+        "advanced": ["ffmpeg_path", "yt_dlp_path", "debug_logging"],
+    }
+
+
+@router.put('/settings', response_model=SavedResponse)
 def put_settings(payload: SettingsPatch, db: Session = Depends(get_db)):
     for k, v in payload.model_dump(exclude_none=True).items():
         db.merge(AppSetting(key=k, value=str(v)))
     db.commit()
     return {"saved": True}
+
+
+@router.delete('/settings/{key}', response_model=DeletedResponse)
+def delete_setting(key: str, db: Session = Depends(get_db)):
+    row = db.get(AppSetting, key)
+    if not row:
+        raise HTTPException(404, "setting not found")
+    db.delete(row)
+    db.commit()
+    return {"deleted": True}
 
 
 @router.get('/sources', response_model=list[SourceOut])
@@ -163,7 +240,7 @@ def create_source(body: SourceCreate, db: Session = Depends(get_db)):
 
 
 @router.post('/sources/{source_id}/refresh')
-def refresh(source_id: int, db: Session = Depends(get_db)):
+def refresh(source_id: int, db: Session = Depends(get_db)) -> QueuedResponse:
     refresh_source(db, source_id)
     return {"queued": True}
 
@@ -178,6 +255,52 @@ def patch_source(source_id: int, body: SourcePatch, db: Session = Depends(get_db
             setattr(src, key, value)
     db.commit()
     return {"saved": True}
+
+
+@router.delete('/sources/{source_id}', response_model=DeletedResponse)
+def delete_source(source_id: int, db: Session = Depends(get_db)):
+    src = db.get(Source, source_id)
+    if not src:
+        raise HTTPException(404)
+    video_ids = [row[0] for row in db.execute(select(VideoItem.id).where(VideoItem.source_id == source_id)).all()]
+    article_ids = [row[0] for row in db.execute(select(Article.id).where(Article.video_item_id.in_(video_ids))).all()] if video_ids else []
+    if article_ids:
+        db.query(CollectionArticle).filter(CollectionArticle.article_id.in_(article_ids)).delete(synchronize_session=False)
+        db.query(ReadingProgress).filter(ReadingProgress.article_id.in_(article_ids)).delete(synchronize_session=False)
+        db.query(ArticleVersion).filter(ArticleVersion.article_id.in_(article_ids)).delete(synchronize_session=False)
+        db.query(Article).filter(Article.id.in_(article_ids)).delete(synchronize_session=False)
+    if video_ids:
+        db.query(Transcript).filter(Transcript.video_item_id.in_(video_ids)).delete(synchronize_session=False)
+        db.query(Job).filter(Job.video_item_id.in_(video_ids)).delete(synchronize_session=False)
+        db.query(VideoItem).filter(VideoItem.id.in_(video_ids)).delete(synchronize_session=False)
+    db.query(Job).filter(Job.source_id == source_id).delete()
+    db.delete(src)
+    db.commit()
+    return {"deleted": True}
+
+
+def _set_source_state(source_id: int, state: SourceState, db: Session) -> SourceActionResponse:
+    src = db.get(Source, source_id)
+    if not src:
+        raise HTTPException(404)
+    src.state = state
+    db.commit()
+    return SourceActionResponse(id=src.id, state=src.state.value if hasattr(src.state, "value") else str(src.state))
+
+
+@router.post('/sources/{source_id}/pause', response_model=SourceActionResponse)
+def pause_source(source_id: int, db: Session = Depends(get_db)):
+    return _set_source_state(source_id, SourceState.paused, db)
+
+
+@router.post('/sources/{source_id}/resume', response_model=SourceActionResponse)
+def resume_source(source_id: int, db: Session = Depends(get_db)):
+    return _set_source_state(source_id, SourceState.enabled, db)
+
+
+@router.post('/sources/{source_id}/archive', response_model=SourceActionResponse)
+def archive_source(source_id: int, db: Session = Depends(get_db)):
+    return _set_source_state(source_id, SourceState.archived, db)
 
 
 @router.get('/jobs')
@@ -203,6 +326,16 @@ def retry_job(job_id: int, db: Session = Depends(get_db)):
         process_video_item(db, job.video_item_id)
     db.commit()
     return {"retried": True}
+
+
+@router.post('/jobs/{job_id}/cancel', response_model=SavedResponse)
+def cancel_job(job_id: int, db: Session = Depends(get_db)):
+    job = db.get(Job, job_id)
+    if not job:
+        raise HTTPException(404)
+    job.status = "cancelled"
+    db.commit()
+    return {"saved": True}
 
 
 @router.post('/items/reprocess')
@@ -394,6 +527,28 @@ def regenerate(article_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "video item not found")
     process_video_item(db, item.id)
     return {"regenerated": True}
+
+
+@router.get('/articles/{article_id}/export')
+def export_article(article_id: int, format: str = Query(default="markdown", pattern="^(markdown|txt|json)$"), db: Session = Depends(get_db)):
+    article = db.get(Article, article_id)
+    if not article:
+        raise HTTPException(404)
+    item = db.get(VideoItem, article.video_item_id)
+    version = db.execute(
+        select(ArticleVersion).where(
+            ArticleVersion.article_id == article_id,
+            ArticleVersion.version == article.latest_version,
+        )
+    ).scalar_one_or_none()
+    if not version:
+        raise HTTPException(404, "article version not found")
+    title = item.title if item else f"Article {article_id}"
+    if format == "json":
+        return {"article_id": article_id, "title": title, "version": article.latest_version, "body": version.body}
+    if format == "txt":
+        return Response(content=f"{title}\n\n{version.body}", media_type="text/plain")
+    return Response(content=f"# {title}\n\n{version.body}", media_type="text/markdown")
 
 
 @router.post('/articles/{article_id}/read-state')
