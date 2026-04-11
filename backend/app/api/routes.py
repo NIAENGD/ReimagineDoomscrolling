@@ -28,7 +28,17 @@ from app.schemas.common import (
     SettingsPatch,
 )
 from app.schemas.source import SourceActionResponse, SourceCreate, SourceOut, SourcePatch
+from app.services.diagnostics import (
+    check_binary,
+    check_db,
+    check_faster_whisper,
+    check_lmstudio_connectivity,
+    check_openai_connectivity,
+    check_storage_writable,
+    check_transcript_dependency,
+)
 from app.services.generation import ProviderConfig, generate_article, render_prompt
+from app.services.ops import redact_secrets
 from app.services.pipeline import process_video_item, refresh_source
 from app.services.youtube import normalize_source_url, resolve_source_identity
 from app.workers.scheduler import scheduler_status
@@ -656,28 +666,31 @@ def remove_collection_article(collection_id: int, article_id: int, db: Session =
 
 @router.get('/diagnostics')
 def diagnostics(db: Session = Depends(get_db)):
-    import shutil
-
     ffmpeg_command = "ffmpeg"
     yt_dlp_command = "yt-dlp"
-
-    rows = db.execute(select(AppSetting).where(AppSetting.key.in_(["ffmpeg_path", "yt_dlp_path"]))).scalars().all()
+    rows = db.execute(
+        select(AppSetting).where(
+            AppSetting.key.in_(["ffmpeg_path", "yt_dlp_path", "openai_api_key", "openai_base_url", "lmstudio_base_url"])
+        )
+    ).scalars().all()
     settings_map = {row.key: row.value.strip() for row in rows}
     ffmpeg_command = settings_map.get("ffmpeg_path") or ffmpeg_command
     yt_dlp_command = settings_map.get("yt_dlp_path") or yt_dlp_command
-
-    ffmpeg_detected = bool(shutil.which(ffmpeg_command) or shutil.which("ffmpeg"))
-    yt_dlp_path = shutil.which(yt_dlp_command) or shutil.which("yt-dlp")
-    yt_dlp_detected = bool(yt_dlp_path)
+    openai_base_url = settings_map.get("openai_base_url") or DEFAULT_APP_SETTINGS["openai_base_url"]
+    lmstudio_base_url = settings_map.get("lmstudio_base_url") or DEFAULT_APP_SETTINGS["lmstudio_base_url"]
+    openai_api_key = settings_map.get("openai_api_key", "")
+    ffmpeg_status = check_binary(ffmpeg_command, fallback="ffmpeg")
+    yt_dlp_status = check_binary(yt_dlp_command, fallback="yt-dlp")
 
     return {
-        'ffmpeg': ffmpeg_detected,
-        'ffmpeg_command': ffmpeg_command,
-        'yt_dlp': yt_dlp_detected,
-        'yt_dlp_command': yt_dlp_command,
-        'yt_dlp_path': yt_dlp_path or '',
-        'faster_whisper': True,
-        'db': True,
+        'db': check_db(db),
+        'storage': check_storage_writable("./tmp"),
+        'ffmpeg': ffmpeg_status,
+        'yt_dlp': yt_dlp_status,
+        'transcript_dependency': check_transcript_dependency(),
+        'faster_whisper': check_faster_whisper(),
+        'openai_connectivity': check_openai_connectivity(openai_base_url, openai_api_key),
+        'lmstudio_connectivity': check_lmstudio_connectivity(lmstudio_base_url),
         'scheduler': scheduler_status(),
     }
 
@@ -697,11 +710,15 @@ def logs(
     rows = db.execute(select(LogEvent).order_by(LogEvent.created_at.desc()).limit(500)).scalars().all()
     out = []
     for row in rows:
+        sanitized_context = redact_secrets(row.context or "")
+        sanitized_message = redact_secrets(row.message or "")
         if severity and row.severity.lower() != severity.lower():
             continue
-        if context and context.lower() not in row.context.lower():
+        if context and context.lower() not in sanitized_context.lower():
             continue
-        if q and q.lower() not in row.message.lower():
+        if q and q.lower() not in sanitized_message.lower():
             continue
+        row.context = sanitized_context
+        row.message = sanitized_message
         out.append(row)
     return out

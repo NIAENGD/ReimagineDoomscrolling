@@ -17,6 +17,7 @@ from app.models.entities import (
     VideoItem,
 )
 from app.services.generation import ProviderConfig, generate_article, render_prompt
+from app.services.ops import log_event
 from app.services.transcript import fetch_transcript, should_fallback_to_transcription, transcribe_audio_locally
 from app.services.youtube import discover_videos, evaluate_video_policy, normalize_source_url, resolve_source_identity
 
@@ -54,8 +55,10 @@ def refresh_source(db, source_id: int):
     enqueued_count = 0
     duplicate_count = 0
     failed_count = 0
+    seen_video_ids: set[str] = set()
 
     try:
+        log_event(db, "INFO", "refresh_source.start", "Starting source refresh", source_id=source_id)
         source.url = normalize_source_url(source.url)
         try:
             resolved = resolve_source_identity(source.url)
@@ -69,6 +72,7 @@ def refresh_source(db, source_id: int):
         videos = discover_videos(source)
         fetched_count = len(videos)
     except Exception as exc:
+        log_event(db, "ERROR", "refresh_source.error", f"Refresh failed: {exc}", source_id=source_id)
         db.add(Job(type="refresh_source", status="failed", source_id=source_id, error=str(exc)))
         source.failure_count += 1
         source.last_scan_at = datetime.utcnow()
@@ -80,27 +84,49 @@ def refresh_source(db, source_id: int):
         return
 
     for raw in videos:
+        if raw["video_id"] in seen_video_ids:
+            duplicate_count += 1
+            continue
+        seen_video_ids.add(raw["video_id"])
+        existing_for_video = db.execute(
+            select(VideoItem).where(
+                VideoItem.video_id == raw["video_id"],
+                VideoItem.source_id == source_id,
+            )
+        ).scalar_one_or_none()
         allowed, reason = evaluate_video_policy(raw, source)
         if not allowed:
             filtered_count += 1
-            item = VideoItem(
-                source_id=source_id,
-                video_id=raw["video_id"],
-                url=raw["url"],
-                title=raw["title"],
-                status=ItemStatus.skipped_by_policy,
-                status_message=reason,
-            )
-            db.merge(item)
+            if existing_for_video:
+                existing_for_video.status = ItemStatus.skipped_by_policy
+                existing_for_video.status_message = reason
+            else:
+                item = VideoItem(
+                    source_id=source_id,
+                    video_id=raw["video_id"],
+                    url=raw["url"],
+                    title=raw["title"],
+                    duration_seconds=int(raw.get("duration", 0) or 0),
+                    status=ItemStatus.skipped_by_policy,
+                    status_message=reason,
+                )
+                db.add(item)
             continue
         exists_stmt = select(VideoItem).where(VideoItem.video_id == raw["video_id"])
         if source.dedup_policy == "source_video_id":
             exists_stmt = exists_stmt.where(VideoItem.source_id == source_id)
-        exists = db.execute(exists_stmt).scalar_one_or_none()
+        exists = existing_for_video if source.dedup_policy == "source_video_id" else db.execute(exists_stmt).scalar_one_or_none()
         if exists:
             duplicate_count += 1
             continue
-        item = VideoItem(source_id=source_id, video_id=raw["video_id"], url=raw["url"], title=raw["title"], status=ItemStatus.queued)
+        item = VideoItem(
+            source_id=source_id,
+            video_id=raw["video_id"],
+            url=raw["url"],
+            title=raw["title"],
+            duration_seconds=int(raw.get("duration", 0) or 0),
+            status=ItemStatus.queued,
+        )
         db.add(item)
         db.flush()
         _set_item_status(db, item, ItemStatus.queued)
@@ -121,6 +147,14 @@ def refresh_source(db, source_id: int):
         f"enqueued={enqueued_count};duplicates={duplicate_count};failed={failed_count}"
     )
     db.commit()
+    log_event(
+        db,
+        "INFO",
+        "refresh_source.done",
+        f"Refresh complete fetched={fetched_count} filtered={filtered_count} enqueued={enqueued_count} duplicates={duplicate_count} failed={failed_count}",
+        source_id=source_id,
+    )
+    db.commit()
 
 
 def process_video_item(db, item_id: int):
@@ -130,6 +164,7 @@ def process_video_item(db, item_id: int):
     source = db.get(Source, item.source_id)
 
     try:
+        log_event(db, "INFO", "process_item.start", "Starting item processing", source_id=item.source_id, item_id=item.id)
         _set_item_status(db, item, ItemStatus.metadata_fetched)
         _set_item_status(db, item, ItemStatus.transcript_searching)
 
@@ -243,6 +278,7 @@ def process_video_item(db, item_id: int):
         db.add(job)
         db.flush()
         db.add(JobItem(job_id=job.id, video_item_id=item.id, status="done"))
+        log_event(db, "INFO", "process_item.done", "Item processed successfully", source_id=item.source_id, item_id=item.id)
     except Exception as exc:
         global_attempts = int(_get_setting(db, "retry_default_max_attempts", "2"))
         global_base = int(_get_setting(db, "retry_default_backoff_minutes", "10"))
@@ -263,6 +299,7 @@ def process_video_item(db, item_id: int):
         db.add(job)
         db.flush()
         db.add(JobItem(job_id=job.id, video_item_id=item.id, status="failed", error=str(exc)))
+        log_event(db, "ERROR", "process_item.error", f"Item processing failed: {exc}", source_id=item.source_id, item_id=item.id)
         db.commit()
         raise
 

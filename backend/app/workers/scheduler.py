@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.models.entities import AppSetting, ItemStatus, LogEvent, Source, SourceState, Transcript, VideoItem
+from app.services.ops import log_event
 from app.services.pipeline import process_video_item, refresh_source
 
 scheduler = BackgroundScheduler()
@@ -32,6 +33,8 @@ def tick_sources():
     db = SessionLocal()
     try:
         if not _bool_setting(db, "scheduler_enabled", True):
+            log_event(db, "INFO", "scheduler.tick", "Scheduler tick skipped because scheduler is disabled")
+            db.commit()
             return
 
         cap = max(1, _int_setting(db, "scheduler_concurrency_cap", 2))
@@ -49,6 +52,7 @@ def tick_sources():
             if not src.next_run_at:
                 src.next_run_at = now
             if src.next_run_at <= now:
+                log_event(db, "INFO", "scheduler.refresh", "Refreshing source from scheduler", source_id=src.id)
                 refresh_source(db, src.id)
                 missed_intervals = max(1, int((now - src.next_run_at).total_seconds() // (cadence * 60)) + 1)
                 src.next_run_at = src.next_run_at + timedelta(minutes=cadence * missed_intervals)
@@ -62,6 +66,7 @@ def tick_sources():
             ).limit(cap)
         ).scalars().all()
         for item in retry_items:
+            log_event(db, "INFO", "scheduler.retry", "Retrying failed item", source_id=item.source_id, item_id=item.id)
             process_video_item(db, item.id)
         _run_retention_cleanup(db)
         db.commit()

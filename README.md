@@ -358,36 +358,36 @@ Status key used below:
 | --------------------------------------- | -------- | ----- |
 | DB connectivity diagnostic | ✅ Done | Diagnostics endpoint reports DB health flag. |
 | Queue/scheduler health diagnostic | ✅ Done | Diagnostics includes live scheduler status payload from runtime scheduler state. |
-| Storage writability diagnostic | ❌ Not done | No file-system writability check is performed. |
+| Storage writability diagnostic | ✅ Done | Diagnostics now performs a writable probe against `./tmp` and reports path/error details. |
 | FFmpeg availability diagnostic | ✅ Done | Diagnostics checks FFmpeg availability via `shutil.which`. |
-| yt-dlp availability/version diagnostic | 🟡 Partial | Presence is checked, but version info is not reported. |
-| Transcript dependency health diagnostic | ❌ Not done | No explicit `youtube_transcript_api` runtime diagnostic check. |
-| Faster-Whisper availability diagnostic | 🟡 Partial | Endpoint returns static true rather than probing model/runtime availability. |
-| OpenAI connectivity diagnostic | ❌ Not done | No active OpenAI connectivity test in diagnostics. |
-| LM Studio connectivity diagnostic | ❌ Not done | No LM Studio connectivity probe in diagnostics. |
-| Structured logging implemented | 🟡 Partial | `LogEvent` structure exists, but consistent structured emission pipeline is minimal. |
+| yt-dlp availability/version diagnostic | ✅ Done | Diagnostics now reports resolved command path and `--version` output when available. |
+| Transcript dependency health diagnostic | ✅ Done | Diagnostics now imports/probes `youtube_transcript_api` and returns dependency health + version where possible. |
+| Faster-Whisper availability diagnostic | ✅ Done | Diagnostics now performs runtime module/class availability checks for Faster-Whisper and reports package version when available. |
+| OpenAI connectivity diagnostic | ✅ Done | Diagnostics now probes OpenAI-compatible `/models` with configured base URL/key and returns status metadata. |
+| LM Studio connectivity diagnostic | ✅ Done | Diagnostics now probes LM Studio `/models` endpoint and reports connectivity status metadata. |
+| Structured logging implemented | ✅ Done | Pipeline and scheduler now emit structured `LogEvent` entries with consistent context and severity. |
 | Log filtering | ✅ Done | `/logs` supports filter params for severity, context, and query text. |
 | Log searching | ✅ Done | `/logs?q=...` performs message text search filtering. |
 | Log severity filtering | ✅ Done | `/logs?severity=...` filters by severity value. |
-| Linked log context | 🟡 Partial | Context field exists, but linkage to entity IDs/traces is limited. |
-| Secret redaction in logs | ❌ Not done | No explicit redaction layer observed in log-writing/serialization paths. |
+| Linked log context | ✅ Done | Logging helper now appends source/item identifiers in context strings for easier traceability. |
+| Secret redaction in logs | ✅ Done | Redaction helper now masks common API key/token patterns in persisted and API-returned log content. |
 
 ### Cleanup, reliability, and operational rules
 
 | Task                                                           | Progress | Notes |
 | -------------------------------------------------------------- | -------- | ----- |
-| Strong idempotency on repeated refreshes | 🟡 Partial | Duplicate video insertions are prevented, but refresh run/job side effects are not fully idempotency-managed. |
+| Strong idempotency on repeated refreshes | ✅ Done | Refresh loop now tracks duplicate IDs within a run and guards against duplicate DB insertion/update paths. |
 | Repeated refreshes do not create uncontrolled duplicates | ✅ Done | Unique constraint + duplicate checks avoid duplicate items for same source/video. |
 | Failure isolation per video/item | ✅ Done | Processing exceptions mark only the item as failed and continue per-item handling. |
-| Failed items are retryable | 🟡 Partial | Job status can be toggled to retry pending, but full automatic replay executor is limited. |
-| Replayability of failed items | 🟡 Partial | Manual retries can be requested, but no robust replay pipeline/state machine is present. |
+| Failed items are retryable | ✅ Done | Failed/retry-pending items are retried by scheduler when `next_retry_at` is due and can also be manually retried. |
+| Replayability of failed items | ✅ Done | Retry metadata (`retry_count`, `next_retry_at`, backoff settings) and manual/API reprocessing endpoints provide replay flow. |
 | Article versioning instead of silent overwrite | ✅ Done | Regeneration appends version rows and increments latest version. |
 | Temporary audio deleted after successful processing by default | ✅ Done | Temporary transcription directory is auto-cleaned after processing. |
-| Optional failed-audio retention policy | ❌ Not done | No failed-audio retention toggle/path exists. |
-| Temp cleanup TTL enforcement | ❌ Not done | No scheduled TTL cleanup worker for temp files. |
-| Transcript retention policy enforcement | ❌ Not done | No transcript pruning/retention policy logic exists. |
-| Thumbnail cache policy enforcement | ❌ Not done | No thumbnail caching layer to enforce policy against. |
-| Log retention enforcement | ❌ Not done | No log retention cleanup job implemented. |
+| Optional failed-audio retention policy | ✅ Done | Local transcription now supports retain-on-failure behavior and persists retained file path metadata. |
+| Temp cleanup TTL enforcement | ✅ Done | Scheduler retention worker prunes stale files in `./tmp/failed_audio` based on `temp_cleanup_ttl_hours`. |
+| Transcript retention policy enforcement | ✅ Done | Scheduler retention worker prunes transcript rows by `transcript_retention_days`. |
+| Thumbnail cache policy enforcement | ✅ Done | Scheduler retention worker clears stale thumbnail URLs by configured cache TTL. |
+| Log retention enforcement | ✅ Done | Scheduler retention worker deletes old log rows according to `log_retention_days`. |
 | API keys never exposed in frontend payloads | ✅ Done | Secret setting keys are redacted in `GET /settings` responses. |
 | Long-running work moved off request thread | ❌ Not done | Refresh/process runs synchronously in request path. |
 
@@ -397,17 +397,17 @@ Status key used below:
 | --------------------------------------------------- | -------- | ----- |
 | Unit: source URL normalization | ✅ Done | Covered in `backend/tests/test_unit.py`. |
 | Unit: source policy evaluation | ✅ Done | Covered in `backend/tests/test_unit.py`. |
-| Unit: deduplication | ❌ Not done | No explicit unit test case found for this scenario. |
-| Unit: transcript selection | ❌ Not done | No explicit unit test case found for this scenario. |
+| Unit: deduplication | ✅ Done | Added unit-level coverage for source-scoped dedup behavior and duplicate suppression logic. |
+| Unit: transcript selection | ✅ Done | Added tests for transcript strategy/fallback decision behavior. |
 | Unit: fallback decision logic | ✅ Done | Covered in `backend/tests/test_unit.py`. |
 | Unit: prompt rendering | ✅ Done | Covered in `backend/tests/test_unit.py`. |
 | Unit: provider abstraction | ✅ Done | Unsupported provider validation covered in unit tests. |
-| Unit: cleanup policy | ❌ Not done | No explicit unit test case found for this scenario. |
-| Unit: status transitions | ❌ Not done | No explicit unit test case found for this scenario. |
-| Unit: schedule calculation | ❌ Not done | No explicit unit test case found for this scenario. |
-| Unit: article preview extraction | ❌ Not done | No explicit unit test case found for this scenario. |
+| Unit: cleanup policy | ✅ Done | Added deterministic unit checks for TTL-style cleanup cutoff behavior. |
+| Unit: status transitions | ✅ Done | Added tests validating expected processing status progression order. |
+| Unit: schedule calculation | ✅ Done | Added policy/schedule unit checks for rolling-window inclusion and exclusion outcomes. |
+| Unit: article preview extraction | ✅ Done | Added explicit unit check for article preview truncation behavior. |
 | Integration: create settings | ✅ Done | Integration test writes settings via API. |
-| Integration: update settings | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: update settings | ✅ Done | Added integration coverage for writing/updating settings and validating persisted behavior via API. |
 | Integration: add source | ✅ Done | Integration test creates source via API. |
 | Integration: run refresh | ✅ Done | Integration test invokes source refresh endpoint. |
 | Integration: discover videos | ❌ Not done | No explicit integration test case found for this scenario. |
@@ -415,10 +415,10 @@ Status key used below:
 | Integration: transcript failure plus audio fallback | ❌ Not done | No explicit integration test case found for this scenario. |
 | Integration: successful article generation | ❌ Not done | No explicit integration test case found for this scenario. |
 | Integration: article regeneration versioning | ❌ Not done | No explicit integration test case found for this scenario. |
-| Integration: duplicate suppression | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: duplicate suppression | ✅ Done | Added integration test that refreshes duplicate feed entries and verifies single library item output. |
 | Integration: audio cleanup after success | ❌ Not done | No explicit integration test case found for this scenario. |
 | Integration: retry failed item | ❌ Not done | No explicit integration test case found for this scenario. |
-| Integration: diagnostics behavior | ❌ Not done | No explicit integration test case found for this scenario. |
+| Integration: diagnostics behavior | ✅ Done | Added integration test coverage for diagnostics payload structure and key runtime checks. |
 | E2E: save settings | ❌ Not done | No end-to-end test suite/case found for this scenario. |
 | E2E: add source | ❌ Not done | No end-to-end test suite/case found for this scenario. |
 | E2E: force refresh | ❌ Not done | No end-to-end test suite/case found for this scenario. |
@@ -437,13 +437,13 @@ Status key used below:
 | Failure-path: OpenAI auth failure | ❌ Not done | No dedicated failure-path automated test for this case was found. |
 | Failure-path: LM Studio connection failure | ❌ Not done | No dedicated failure-path automated test for this case was found. |
 | Failure-path: malformed model response | ❌ Not done | No dedicated failure-path automated test for this case was found. |
-| Failure-path: duplicate refresh request | ❌ Not done | No dedicated failure-path automated test for this case was found. |
-| Mocks/fakes for OpenAI | ❌ Not done | No dedicated mock/fake test harness for this dependency was found. |
-| Mocks/fakes for LM Studio | ❌ Not done | No dedicated mock/fake test harness for this dependency was found. |
-| Mocks/fakes for transcript package calls | ❌ Not done | No dedicated mock/fake test harness for this dependency was found. |
-| Mocks/fakes for yt-dlp | ❌ Not done | No dedicated mock/fake test harness for this dependency was found. |
-| Mocks/fakes for Faster-Whisper | ❌ Not done | No dedicated mock/fake test harness for this dependency was found. |
-| Mocks/fakes for YouTube metadata/discovery | ❌ Not done | No dedicated mock/fake test harness for this dependency was found. |
+| Failure-path: duplicate refresh request | ✅ Done | Added integration coverage that exercises duplicate discovery entries and validates suppression behavior. |
+| Mocks/fakes for OpenAI | ✅ Done | Integration tests now monkeypatch generation calls to deterministic fake outputs. |
+| Mocks/fakes for LM Studio | 🟡 Partial | OpenAI-compatible generation path is mockable; dedicated LM Studio-specific fixture matrix is still limited. |
+| Mocks/fakes for transcript package calls | ✅ Done | Integration tests monkeypatch transcript-fetch path with deterministic responses. |
+| Mocks/fakes for yt-dlp | 🟡 Partial | Local transcription path remains external-process based; test harness primarily targets transcript-first/mocked processing flows. |
+| Mocks/fakes for Faster-Whisper | 🟡 Partial | Runtime diagnostics now probe dependency availability, but transcription model execution is not fully mocked in all failure matrix tests. |
+| Mocks/fakes for YouTube metadata/discovery | ✅ Done | Integration tests monkeypatch discovery and identity resolution for deterministic source refresh coverage. |
 
 ### Deployment and local developer experience
 
