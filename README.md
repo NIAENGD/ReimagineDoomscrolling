@@ -43,7 +43,7 @@ Use `run_app.bat` option 5, or run:
 ---
 
 ## Progress Table (Current status)
-Pleaase use this progress table, DO NOT create any new progress table.
+Please use this progress table, DO NOT create any new progress table.
 Status key used below:
 - ✅ Done: implemented and wired in runtime.
 - 🟡 Partial: implemented but limited, hard-coded, or not fully aligned with roadmap behavior.
@@ -56,16 +56,16 @@ Status key used below:
 | Persistent settings entity and storage | ✅ Done | `AppSetting` model plus `/settings` GET/PUT persists key/value settings. |
 | Durable sources entity with policy fields | ✅ Done | `Source` model stores URL/state/cadence/discovery/policy fields used by refresh logic. |
 | Canonical channel identity persistence | 🟡 Partial | `channel_id` exists but canonical resolution is not actually populated in create/refresh flows. |
-| Source refresh runs entity | 🟡 Partial | `RefreshRun` model exists, but refresh pipeline does not write run rows. |
+| Source refresh runs entity | ✅ Done | `RefreshRun` rows are created and finalized during each refresh execution. |
 | Video/item entity with dedup-safe identity | ✅ Done | `VideoItem` has unique `(source_id, video_id)` constraint and duplicate check in refresh. |
 | Transcript entity and metadata storage | 🟡 Partial | Transcript text/source/language stored, but richer metadata and lifecycle fields are not captured. |
 | Articles entity | ✅ Done | `Article` model exists and is created during processing. |
 | Article versions entity | ✅ Done | `ArticleVersion` rows are appended on generation/regeneration. |
 | Collections entity | ✅ Done | Collection and join models exist with CRUD endpoints. |
 | Jobs entity | ✅ Done | `Job` model is used for process/refresh success/failure tracking. |
-| Job items entity | ❌ Not done | No separate job-item table; only single `Job` records are present. |
+| Job items entity | ✅ Done | `JobItem` model is present and written alongside process-item jobs. |
 | Logs/events entity | ✅ Done | `LogEvent` table exists and `/logs` endpoint reads recent events. |
-| Reading progress entity | ❌ Not done | No dedicated reading-progress table or per-position persistence model. |
+| Reading progress entity | ✅ Done | `ReadingProgress` table persists per-article position/total and is updated via API. |
 | Practical schema only, no speculative bloat | ✅ Done | Schema stays compact and focused on currently wired runtime features. |
 | Alembic migrations created | ❌ Not done | Migration folder has guidance only; no concrete Alembic revision files committed. |
 | Migrations apply cleanly | 🟡 Partial | Startup uses `Base.metadata.create_all`; Alembic upgrade path is documented but not implemented/tested. |
@@ -121,18 +121,18 @@ Status key used below:
 
 | Task                               | Progress | Notes |
 | ---------------------------------- | -------- | ----- |
-| Global refresh enabled/disabled | ❌ Not done | No global scheduler enable flag exposed/stored. |
-| Global default cadence | ❌ Not done | No separate global cadence setting; only per-source cadence field. |
+| Global refresh enabled/disabled | ✅ Done | Scheduler respects persisted `scheduler_enabled` setting and reports it in status. |
+| Global default cadence | 🟡 Partial | Global cadence setting exists in scheduler status/settings defaults, but per-source cadence still drives actual runs. |
 | Per-source cadence override | ✅ Done | Each source has its own `cadence_minutes` used by scheduler. |
 | Hourly refresh support | ✅ Done | Cadence is minute-based; 60-minute hourly operation is supported. |
 | Next scheduled run tracking | ✅ Done | Scheduler updates `next_run_at` after each run. |
 | Last successful run tracking | ✅ Done | Refresh sets `last_success_at` on successful completion. |
 | Missed-run handling | ❌ Not done | No explicit missed-run catch-up/backfill policy beyond simple due check. |
-| Backoff after repeated failure | ❌ Not done | Failure counter increments, but no adaptive backoff strategy is applied. |
-| Concurrency cap | ❌ Not done | No scheduler/worker concurrency limiter implemented. |
+| Backoff after repeated failure | ✅ Done | Refresh failures apply exponential next-run backoff capped to a max delay. |
+| Concurrency cap | ✅ Done | Scheduler enforces a per-tick cap via `scheduler_concurrency_cap`. |
 | Retry intervals/backoff settings | ❌ Not done | No configurable retry interval/backoff engine for failed items/jobs. |
 | Scheduler runs automatically | ✅ Done | Backend startup calls scheduler bootstrap and background tick job. |
-| Scheduler status visible in UI/API | ❌ Not done | No dedicated scheduler status endpoint/UI card sourced from runtime scheduler state. |
+| Scheduler status visible in UI/API | 🟡 Partial | Dedicated scheduler status endpoint exists; frontend lacks a focused scheduler status card/view. |
 
 ### Item lifecycle and processing states
 
@@ -168,7 +168,7 @@ Status key used below:
 | Force local transcription strategy | 🟡 Partial | Fallback helper supports it, but pipeline currently passes hard-coded strategy values. |
 | Transcript-first then audio fallback strategy | 🟡 Partial | Flow is transcript-first with fallback, but source-specific strategy is not wired through. |
 | Disable fallback strategy | 🟡 Partial | Helper supports disable, but pipeline hard-codes fallback enabled. |
-| Preferred transcript languages | ❌ Not done | Pipeline always requests `["en"]`; no persisted language preference wiring. |
+| Preferred transcript languages | ✅ Done | Pipeline reads `transcript_languages` setting and passes ordered language preferences. |
 | Retrieve transcript when available | ✅ Done | `fetch_transcript` retrieves YouTube transcript text. |
 | Download audio when fallback is needed | ✅ Done | Fallback path downloads audio via `yt-dlp`. |
 | Normalize extracted audio as needed | ❌ Not done | No explicit audio normalization/transcoding pipeline beyond `yt-dlp -x`. |
@@ -186,15 +186,15 @@ Status key used below:
 | Provider abstraction implemented | ✅ Done | `ProviderConfig` + provider switch dispatch implemented. |
 | OpenAI provider support | ✅ Done | OpenAI-compatible chat completion call implemented. |
 | LM Studio OpenAI-compatible provider support | ✅ Done | LM Studio base URL path supported in provider switch. |
-| Persistent provider selection | 🟡 Partial | Settings can store provider-like keys, but generation path is currently hard-coded to OpenAI provider. |
-| Persistent model name | ❌ Not done | Model selection is hard-coded in pipeline, not persisted/loaded. |
-| Persistent API key or base URL | 🟡 Partial | Settings endpoints persist base URLs/key fields, but key is env-driven at runtime in generator. |
+| Persistent provider selection | ✅ Done | Generation pipeline reads `generation_provider` setting at runtime. |
+| Persistent model name | ✅ Done | Generation pipeline reads `generation_model` from persisted settings. |
+| Persistent API key or base URL | 🟡 Partial | Base URL/provider settings are persisted and used; API key persistence is redacted on read and still environment-compatible. |
 | Persistent timeout | ❌ Not done | HTTP timeout is hard-coded; no persisted timeout wiring. |
 | Persistent temperature | ❌ Not done | Temperature defaults in config object; not persisted/wired from settings. |
 | Persistent max tokens | ❌ Not done | No max-token setting passed to chat completion payload. |
-| Persistent article mode | ❌ Not done | Mode is hard-coded to `detailed` in pipeline. |
-| Persistent global prompt template | ❌ Not done | Pipeline uses inline literal template; no stored global template usage. |
-| Optional per-source prompt override | 🟡 Partial | Source has `prompt_override`, but pipeline does not apply it yet. |
+| Persistent article mode | ✅ Done | Generation mode is read from persisted `generation_mode` settings key. |
+| Persistent global prompt template | ✅ Done | Pipeline resolves prompt from persisted `global_prompt_template`. |
+| Optional per-source prompt override | ✅ Done | Source `prompt_override` takes precedence over global template when set. |
 | Prompt preview / resolved prompt inspection | ❌ Not done | No API/UI for previewing resolved prompt before generation. |
 | Test prompt against sample transcript | ❌ Not done | No prompt-test endpoint/tooling in backend or UI. |
 | Store prompt snapshot on every generated article version | ✅ Done | Each version row stores `prompt_snapshot`. |
@@ -216,12 +216,12 @@ Status key used below:
 | Unread filters | ❌ Not done | Unread/read filtering controls are not implemented. |
 | Search by title | ✅ Done | Library search filters by video title. |
 | Search by body | ❌ Not done | Body-content search is not implemented. |
-| Search by source | ❌ Not done | Search currently ignores source metadata. |
-| Sort by import time | ❌ Not done | No sort controls; default DB order only. |
-| Sort by publish time | ❌ Not done | No publish-time sorting controls implemented. |
-| Sort by source | ❌ Not done | No source sorting controls implemented. |
-| Sort by title | ❌ Not done | No explicit title sorting controls implemented. |
-| YouTube thumbnails displayed | ❌ Not done | Library cards do not render thumbnails. |
+| Search by source | 🟡 Partial | API supports source filtering, but frontend UI does not expose a source filter control. |
+| Sort by import time | ✅ Done | Library API supports `sort_by=import_time` default behavior. |
+| Sort by publish time | 🟡 Partial | Library API supports `sort_by=publish_time`; frontend does not expose sort controls. |
+| Sort by source | 🟡 Partial | Library API supports `sort_by=source`; frontend does not expose sort controls. |
+| Sort by title | 🟡 Partial | Library API supports `sort_by=title`; frontend does not expose sort controls. |
+| YouTube thumbnails displayed | ❌ Not done | Thumbnail URL is returned by API, but current library cards do not render image elements. |
 | Preview snippets | ✅ Done | Library payload includes body preview snippet. |
 | Transcript source badges | ❌ Not done | UI does not display transcript source badges. |
 | Polished reader page | 🟡 Partial | Reader page exists with version switch/regenerate but limited reading UX features. |
@@ -238,12 +238,12 @@ Status key used below:
 | Source metadata in reader | ❌ Not done | Reader displays title/content only, not source/channel metadata. |
 | Transcript tab or panel | ❌ Not done | Reader has no transcript panel/tab view. |
 | Article version switcher | ✅ Done | Reader has version dropdown bound to available versions. |
-| Mark as read | ❌ Not done | No mark-read action in API/UI despite `is_read` field. |
-| Mark as unread | ❌ Not done | No mark-unread action in API/UI. |
+| Mark as read | 🟡 Partial | Read-state API exists (`/articles/{id}/read-state`), but reader/library UI does not surface controls. |
+| Mark as unread | 🟡 Partial | Read-state API supports unread toggling, but UI controls are not yet implemented. |
 | Export action | ❌ Not done | No export endpoint/control in reader/library. |
 | Copy action | ❌ Not done | No dedicated copy-to-clipboard action in reader UI. |
 | Related source articles if implemented | ❌ Not done | No related-article recommendations are generated/rendered. |
-| Reading progress persistence | ❌ Not done | No persisted scroll/progress tracking implemented. |
+| Reading progress persistence | 🟡 Partial | Reading progress is persisted via API/model, but reader UI does not currently auto-sync scroll position. |
 
 ### Collections
 
@@ -293,7 +293,7 @@ Status key used below:
 | Sources: skip shorts default | ❌ Not done | No global skip-shorts default setting is wired. |
 | Sources: minimum duration default | ❌ Not done | No global minimum-duration default setting is wired. |
 | Sources: duplicate handling | ❌ Not done | No configurable duplicate-handling setting exists. |
-| Transcript: preferred languages | ❌ Not done | No transcript language preference setting is consumed by processing. |
+| Transcript: preferred languages | ✅ Done | `transcript_languages` setting is consumed by processing when fetching transcripts. |
 | Transcript: transcript-first toggle | ❌ Not done | No toggle wiring for transcript-first behavior in settings/runtime. |
 | Transcript: fallback enabled toggle | ❌ Not done | No global settings toggle currently controls fallback behavior in pipeline. |
 | Transcript: Faster-Whisper model size | ❌ Not done | Whisper model is hard-coded to `base`. |
@@ -301,22 +301,22 @@ Status key used below:
 | Transcript: optional language hint | ❌ Not done | No language-hint setting is passed to transcription/transcript services. |
 | Transcript: delete audio after success default true | 🟡 Partial | Audio is deleted via temp-dir cleanup, but no explicit setting controls this behavior. |
 | Transcript: retain failed audio only optional | ❌ Not done | No optional failed-audio-retention setting/logic exists. |
-| Generation: local and cloud provider | 🟡 Partial | Both provider code paths exist, but runtime selection is not fully wired from settings. |
-| Generation: model | ❌ Not done | No persisted model selection is consumed by generation pipeline. |
+| Generation: local and cloud provider | ✅ Done | Runtime provider selection is loaded from persisted generation settings. |
+| Generation: model | ✅ Done | Persisted model setting is consumed in generation pipeline. |
 | Generation: API key or base URL | 🟡 Partial | Settings store key/base URLs, but generator still relies on environment for API key. |
 | Generation: timeout | ❌ Not done | No persisted timeout parameter is wired to generation calls. |
 | Generation: temperature | ❌ Not done | No persisted temperature setting is wired to generation calls. |
 | Generation: max tokens | ❌ Not done | No max-token setting is persisted or sent to provider payload. |
-| Generation: article mode default | ❌ Not done | Generation mode is fixed, with no configurable default. |
-| Generation: global prompt template | ❌ Not done | No persisted global prompt template is used during generation. |
-| Generation: per-source override allowed | 🟡 Partial | Per-source override field exists, but generation pipeline does not consume it. |
+| Generation: article mode default | ✅ Done | Generation mode default is persisted and consumed from settings. |
+| Generation: global prompt template | ✅ Done | Global prompt template is persisted and used when source override is empty. |
+| Generation: per-source override allowed | ✅ Done | Per-source prompt overrides are consumed in generation pipeline. |
 | Reader: default theme | ❌ Not done | No persisted reader theme default setting exists. |
 | Reader: font family | ❌ Not done | No reader setting control for font family. |
 | Reader: font size | ❌ Not done | No reader setting control for font size. |
 | Reader: line width | ❌ Not done | No reader setting control for line width. |
-| Scheduling: global refresh enabled | ❌ Not done | No global scheduler enable/disable setting is implemented. |
-| Scheduling: default cadence | ❌ Not done | No global default cadence setting is implemented. |
-| Scheduling: concurrency cap | ❌ Not done | No configurable concurrency-cap setting is implemented. |
+| Scheduling: global refresh enabled | ✅ Done | Scheduler reads persisted `scheduler_enabled` toggle before running ticks. |
+| Scheduling: default cadence | 🟡 Partial | Default cadence setting exists and is surfaced in scheduler status, but source cadence remains authoritative at run time. |
+| Scheduling: concurrency cap | ✅ Done | Configurable `scheduler_concurrency_cap` is enforced during scheduler ticks. |
 | Scheduling: retry intervals/backoff | ❌ Not done | No configurable retry interval/backoff settings are implemented. |
 | Storage: temp cleanup TTL | ❌ Not done | No temp-file cleanup TTL setting/policy enforcement exists. |
 | Storage: transcript retention policy | ❌ Not done | No transcript retention setting/policy enforcement exists. |
@@ -336,12 +336,12 @@ Status key used below:
 | Source action APIs | 🟡 Partial | Refresh action exists; explicit pause/resume/archive dedicated endpoints absent. |
 | Source refresh trigger API | ✅ Done | Run-now source refresh endpoint is implemented. |
 | Jobs list API | ✅ Done | `GET /jobs` returns recent jobs. |
-| Jobs detail API | ❌ Not done | No `/jobs/{id}` detail endpoint. |
+| Jobs detail API | ✅ Done | `GET /jobs/{id}` returns individual job details. |
 | Jobs retry API | ✅ Done | `POST /jobs/{id}/retry` marks retry pending. |
 | Jobs cancel API | ❌ Not done | No job cancel endpoint exists. |
-| Item detail API | ❌ Not done | No dedicated `/items/{id}` API route. |
-| Transcript detail API | ❌ Not done | No transcript detail endpoint exists. |
-| Transcript retry API | ❌ Not done | No transcript retry endpoint exists. |
+| Item detail API | ✅ Done | `GET /items/{id}` endpoint returns a video item record. |
+| Transcript detail API | ✅ Done | `GET /transcripts/{item_id}` returns transcript details for an item. |
+| Transcript retry API | ✅ Done | `POST /transcripts/{item_id}/retry` retriggers processing. |
 | Article list API | ✅ Done | `GET /library` functions as article listing API. |
 | Article detail API | ✅ Done | `GET /articles/{id}` returns article + versions. |
 | Article regenerate API | ✅ Done | `POST /articles/{id}/regenerate` triggers new version generation. |
@@ -357,7 +357,7 @@ Status key used below:
 | Task                                    | Progress | Notes |
 | --------------------------------------- | -------- | ----- |
 | DB connectivity diagnostic | ✅ Done | Diagnostics endpoint reports DB health flag. |
-| Queue/scheduler health diagnostic | 🟡 Partial | Diagnostics returns static `queue: true` without real scheduler/queue probing. |
+| Queue/scheduler health diagnostic | ✅ Done | Diagnostics includes live scheduler status payload from runtime scheduler state. |
 | Storage writability diagnostic | ❌ Not done | No file-system writability check is performed. |
 | FFmpeg availability diagnostic | ✅ Done | Diagnostics checks FFmpeg availability via `shutil.which`. |
 | yt-dlp availability/version diagnostic | 🟡 Partial | Presence is checked, but version info is not reported. |
@@ -366,9 +366,9 @@ Status key used below:
 | OpenAI connectivity diagnostic | ❌ Not done | No active OpenAI connectivity test in diagnostics. |
 | LM Studio connectivity diagnostic | ❌ Not done | No LM Studio connectivity probe in diagnostics. |
 | Structured logging implemented | 🟡 Partial | `LogEvent` structure exists, but consistent structured emission pipeline is minimal. |
-| Log filtering | ❌ Not done | Logs endpoint has no filter/query parameters. |
-| Log searching | ❌ Not done | No search capability over log message/context. |
-| Log severity filtering | ❌ Not done | No severity-filter query on `/logs`. |
+| Log filtering | ✅ Done | `/logs` supports filter params for severity, context, and query text. |
+| Log searching | ✅ Done | `/logs?q=...` performs message text search filtering. |
+| Log severity filtering | ✅ Done | `/logs?severity=...` filters by severity value. |
 | Linked log context | 🟡 Partial | Context field exists, but linkage to entity IDs/traces is limited. |
 | Secret redaction in logs | ❌ Not done | No explicit redaction layer observed in log-writing/serialization paths. |
 
@@ -388,7 +388,7 @@ Status key used below:
 | Transcript retention policy enforcement | ❌ Not done | No transcript pruning/retention policy logic exists. |
 | Thumbnail cache policy enforcement | ❌ Not done | No thumbnail caching layer to enforce policy against. |
 | Log retention enforcement | ❌ Not done | No log retention cleanup job implemented. |
-| API keys never exposed in frontend payloads | ❌ Not done | `GET /settings` returns raw key values including `openai_api_key`. |
+| API keys never exposed in frontend payloads | ✅ Done | Secret setting keys are redacted in `GET /settings` responses. |
 | Long-running work moved off request thread | ❌ Not done | Refresh/process runs synchronously in request path. |
 
 ### Testing
