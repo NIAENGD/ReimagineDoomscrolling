@@ -1,10 +1,11 @@
 # Migrations
 
-This project uses Alembic-style SQLAlchemy metadata migrations. For this delivery, schema bootstrap is handled by `Base.metadata.create_all` on startup for zero-touch local Windows setup.
+This project now includes a concrete Alembic environment and initial revision under `backend/alembic/`.
+For local bootstrap convenience, the app still keeps `Base.metadata.create_all` on startup, but schema evolution should use Alembic revisions.
 
 For production, run:
 
 ```bash
-alembic revision --autogenerate -m "..."
-alembic upgrade head
+cd backend
+alembic -c alembic.ini upgrade head
 ```

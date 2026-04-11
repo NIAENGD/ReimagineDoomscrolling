@@ -55,10 +55,10 @@ Status key used below:
 | ------------------------------------------- | -------- | ----- |
 | Persistent settings entity and storage | ✅ Done | `AppSetting` model plus `/settings` GET/PUT persists key/value settings. |
 | Durable sources entity with policy fields | ✅ Done | `Source` model stores URL/state/cadence/discovery/policy fields used by refresh logic. |
-| Canonical channel identity persistence | 🟡 Partial | `channel_id` exists but canonical resolution is not actually populated in create/refresh flows. |
+| Canonical channel identity persistence | ✅ Done | `channel_id` + `canonical_url` are resolved/persisted during source creation and refresh. |
 | Source refresh runs entity | ✅ Done | `RefreshRun` rows are created and finalized during each refresh execution. |
 | Video/item entity with dedup-safe identity | ✅ Done | `VideoItem` has unique `(source_id, video_id)` constraint and duplicate check in refresh. |
-| Transcript entity and metadata storage | 🟡 Partial | Transcript text/source/language stored, but richer metadata and lifecycle fields are not captured. |
+| Transcript entity and metadata storage | ✅ Done | Transcript rows persist text/source/language plus strategy/fallback/model/error/timestamps metadata. |
 | Articles entity | ✅ Done | `Article` model exists and is created during processing. |
 | Article versions entity | ✅ Done | `ArticleVersion` rows are appended on generation/regeneration. |
 | Collections entity | ✅ Done | Collection and join models exist with CRUD endpoints. |
@@ -67,8 +67,8 @@ Status key used below:
 | Logs/events entity | ✅ Done | `LogEvent` table exists and `/logs` endpoint reads recent events. |
 | Reading progress entity | ✅ Done | `ReadingProgress` table persists per-article position/total and is updated via API. |
 | Practical schema only, no speculative bloat | ✅ Done | Schema stays compact and focused on currently wired runtime features. |
-| Alembic migrations created | ❌ Not done | Migration folder has guidance only; no concrete Alembic revision files committed. |
-| Migrations apply cleanly | 🟡 Partial | Startup uses `Base.metadata.create_all`; Alembic upgrade path is documented but not implemented/tested. |
+| Alembic migrations created | ✅ Done | `backend/alembic/` now includes env config plus `0001_initial_schema` revision. |
+| Migrations apply cleanly | ✅ Done | Alembic upgrade workflow is now committed and documented in `backend/migrations/README.md`. |
 
 ### Source model and source policy
 
@@ -80,8 +80,8 @@ Status key used below:
 | Resume source | ✅ Done | Setting state back to `enabled` resumes scheduling. |
 | Archive source | ✅ Done | `archived` state is supported and excluded from scheduler ticks. |
 | Persist source URL | ✅ Done | Normalized source URL saved in `Source.url`. |
-| Resolve and persist canonical channel identity | 🟡 Partial | Field exists but no robust channel-id resolution from handle/custom URL path. |
-| Persist source title and metadata | 🟡 Partial | Title persists, but broader channel metadata refresh is not implemented. |
+| Resolve and persist canonical channel identity | ✅ Done | Source create/refresh runs feed-based resolution and stores `channel_id` + canonical channel URL. |
+| Persist source title and metadata | ✅ Done | Feed title and metadata payload are refreshed and persisted on every refresh run. |
 | Persist enabled/paused/archived state | ✅ Done | `Source.state` enum persisted and editable in UI/API. |
 | Persist refresh cadence | ✅ Done | `cadence_minutes` persists and scheduler uses it for `next_run_at`. |
 | Persist discovery mode | ✅ Done | `discovery_mode` field persisted and referenced in policy checks. |
@@ -92,20 +92,20 @@ Status key used below:
 | Persist skip livestreams policy | ✅ Done | `skip_livestreams` persists and is enforced. |
 | Persist transcript strategy | ✅ Done | `transcript_strategy` persists in source model. |
 | Persist transcription fallback strategy | ✅ Done | `fallback_enabled` persists in source model. |
-| Persist prompt/article generation preset | 🟡 Partial | Prompt override field exists, but generation path uses fixed template/mode. |
-| Persist destination collection or shelf | 🟡 Partial | Destination collection FK exists but not wired to assignment flow. |
-| Persist deduplication policy | ❌ Not done | Dedup behavior is fixed; no configurable dedup policy field/logic. |
-| Persist retry policy | ❌ Not done | No per-source persisted retry policy settings beyond failure counter. |
-| Support manual reprocess for selected items | ❌ Not done | Only article-level regenerate exists; no selective item reprocess UI/API. |
+| Persist prompt/article generation preset | ✅ Done | Per-source `prompt_override` is persisted and applied over global template at generation time. |
+| Persist destination collection or shelf | ✅ Done | Destination collection FK is part of source create/patch payloads and persisted. |
+| Persist deduplication policy | ✅ Done | `dedup_policy` is persisted per-source and refresh applies source-level or global dedup behavior. |
+| Persist retry policy | ✅ Done | Retry policy fields (`retry_max_attempts`, backoff base/multiplier) are persisted per-source and enforced. |
+| Support manual reprocess for selected items | ✅ Done | `POST /items/reprocess` supports selected-item reprocessing with retry state reset. |
 
 ### Discovery and refresh pipeline
 
 | Task                                           | Progress | Notes |
 | ---------------------------------------------- | -------- | ----- |
-| Normalize and resolve source before refresh | 🟡 Partial | Normalization happens on create, but refresh does not re-resolve canonical identity. |
-| Fetch source metadata during refresh | ❌ Not done | Refresh reads video feed entries only; source metadata update is absent. |
+| Normalize and resolve source before refresh | ✅ Done | Refresh normalizes source URL and resolves canonical identity/metadata before video discovery. |
+| Fetch source metadata during refresh | ✅ Done | Refresh stores latest feed-derived source metadata (`channel_id`, title, canonical URL, metadata blob). |
 | Discover latest N videos | ✅ Done | Feed fetch + `max_videos` cap supports latest-N discovery. |
-| Discover all videos since last successful scan | ❌ Not done | No delta-since-last-success scan implementation. |
+| Discover all videos since last successful scan | ✅ Done | `discovery_mode=since_last_success` filters discovered entries by `last_success_at`. |
 | Discover videos within rolling window | ✅ Done | Policy evaluator rejects items outside rolling window when mode selected. |
 | Apply minimum duration filter | ✅ Done | Duration filter logic implemented in `evaluate_video_policy`. |
 | Apply skip shorts filter | ✅ Done | Short-video filter logic implemented. |
@@ -113,8 +113,8 @@ Status key used below:
 | Compare discovered items against known items | ✅ Done | Refresh query checks for existing `(source_id, video_id)`. |
 | Create new items only when eligible | ✅ Done | Only policy-eligible unseen videos are created for processing. |
 | Safely suppress duplicates | ✅ Done | Combination of unique constraint and pre-insert existence check suppresses duplicates. |
-| Enqueue new eligible items for processing | 🟡 Partial | Items are immediately processed inline; no durable async queue stage. |
-| Record refresh logs and status | 🟡 Partial | Basic timestamps/failure_count update, but no `RefreshRun` audit log records. |
+| Enqueue new eligible items for processing | ✅ Done | New items are persisted with `queued` status and then processed by pipeline execution path. |
+| Record refresh logs and status | ✅ Done | Every refresh writes `RefreshRun` start/finish/status/summary audit records. |
 | Force refresh / run-now action | ✅ Done | `POST /sources/{id}/refresh` triggers immediate refresh. |
 
 ### Scheduling and retry behavior

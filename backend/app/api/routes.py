@@ -7,6 +7,7 @@ from app.models.entities import (
     AppSetting,
     Article,
     ArticleVersion,
+    ItemStatus,
     Collection,
     Job,
     LogEvent,
@@ -17,7 +18,7 @@ from app.models.entities import (
 from app.schemas.common import CollectionCreate, MarkReadPayload, ReadingProgressPayload, SettingsPatch
 from app.schemas.source import SourceCreate, SourceOut, SourcePatch
 from app.services.pipeline import process_video_item, refresh_source
-from app.services.youtube import normalize_source_url
+from app.services.youtube import normalize_source_url, resolve_source_identity
 from app.workers.scheduler import scheduler_status
 
 router = APIRouter()
@@ -79,12 +80,32 @@ def create_source(body: SourceCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(400, "source already exists")
 
+    resolved = {}
+    try:
+        resolved = resolve_source_identity(normalized)
+    except Exception:
+        resolved = {"normalized_url": normalized, "canonical_url": normalized, "channel_id": "", "title": ""}
+
     src = Source(
-        url=normalized,
-        title=body.title or normalized,
+        url=resolved.get("normalized_url", normalized),
+        canonical_url=resolved.get("canonical_url", normalized),
+        channel_id=resolved.get("channel_id", ""),
+        title=body.title or resolved.get("title") or normalized,
         cadence_minutes=body.cadence_minutes,
         discovery_mode=body.discovery_mode,
         max_videos=body.max_videos,
+        rolling_window_hours=body.rolling_window_hours,
+        skip_shorts=body.skip_shorts,
+        min_duration_seconds=body.min_duration_seconds,
+        skip_livestreams=body.skip_livestreams,
+        transcript_strategy=body.transcript_strategy,
+        fallback_enabled=body.fallback_enabled,
+        prompt_override=body.prompt_override,
+        destination_collection_id=body.destination_collection_id,
+        dedup_policy=body.dedup_policy,
+        retry_max_attempts=body.retry_max_attempts,
+        retry_backoff_minutes=body.retry_backoff_minutes,
+        retry_backoff_multiplier=body.retry_backoff_multiplier,
     )
     db.add(src)
     db.commit()
@@ -133,6 +154,21 @@ def retry_job(job_id: int, db: Session = Depends(get_db)):
         process_video_item(db, job.video_item_id)
     db.commit()
     return {"retried": True}
+
+
+@router.post('/items/reprocess')
+def reprocess_items(item_ids: list[int], db: Session = Depends(get_db)):
+    processed = 0
+    for item_id in item_ids:
+        item = db.get(VideoItem, item_id)
+        if not item:
+            continue
+        item.retry_count = 0
+        item.next_retry_at = None
+        item.status = ItemStatus.queued
+        process_video_item(db, item_id)
+        processed += 1
+    return {"processed": processed}
 
 
 @router.get('/items/{item_id}')

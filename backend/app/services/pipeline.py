@@ -17,7 +17,7 @@ from app.models.entities import (
 )
 from app.services.generation import ProviderConfig, generate_article, render_prompt
 from app.services.transcript import fetch_transcript, should_fallback_to_transcription, transcribe_audio_locally
-from app.services.youtube import discover_videos, evaluate_video_policy
+from app.services.youtube import discover_videos, evaluate_video_policy, normalize_source_url, resolve_source_identity
 
 
 def _get_setting(db, key: str, default: str = "") -> str:
@@ -27,6 +27,8 @@ def _get_setting(db, key: str, default: str = "") -> str:
 
 def refresh_source(db, source_id: int):
     source = db.get(Source, source_id)
+    if not source:
+        return
     run = RefreshRun(source_id=source_id, status="running", summary="")
     db.add(run)
     db.flush()
@@ -38,6 +40,16 @@ def refresh_source(db, source_id: int):
     failed_count = 0
 
     try:
+        source.url = normalize_source_url(source.url)
+        try:
+            resolved = resolve_source_identity(source.url)
+            source.channel_id = resolved.get("channel_id", source.channel_id)
+            source.canonical_url = resolved.get("canonical_url", source.canonical_url)
+            if resolved.get("title"):
+                source.title = resolved["title"]
+            source.metadata_json = str(resolved)
+        except Exception:
+            pass
         videos = discover_videos(source)
         fetched_count = len(videos)
     except Exception as exc:
@@ -65,7 +77,10 @@ def refresh_source(db, source_id: int):
             )
             db.merge(item)
             continue
-        exists = db.execute(select(VideoItem).where(VideoItem.source_id == source_id, VideoItem.video_id == raw["video_id"])).scalar_one_or_none()
+        exists_stmt = select(VideoItem).where(VideoItem.video_id == raw["video_id"])
+        if source.dedup_policy == "source_video_id":
+            exists_stmt = exists_stmt.where(VideoItem.source_id == source_id)
+        exists = db.execute(exists_stmt).scalar_one_or_none()
         if exists:
             duplicate_count += 1
             continue
@@ -93,6 +108,9 @@ def refresh_source(db, source_id: int):
 
 def process_video_item(db, item_id: int):
     item = db.get(VideoItem, item_id)
+    if not item:
+        return
+    source = db.get(Source, item.source_id)
 
     try:
         item.status = ItemStatus.transcript_searching
@@ -100,15 +118,16 @@ def process_video_item(db, item_id: int):
         languages = [lang.strip() for lang in language_pref.split(",") if lang.strip()] or ["en"]
         text, source_kind = fetch_transcript(item.url, languages)
 
-        source = db.get(Source, item.source_id)
         strategy = source.transcript_strategy if source else "transcript_first"
         fallback_enabled = source.fallback_enabled if source else True
+        fallback_used = False
 
         if not text and should_fallback_to_transcription(strategy, False, fallback_enabled):
             item.status = ItemStatus.transcription_started
             yt_dlp_command = _get_setting(db, "yt_dlp_path", "yt-dlp").strip() or "yt-dlp"
             text = transcribe_audio_locally(item.url, yt_dlp_command=yt_dlp_command)
             source_kind = "local_transcription"
+            fallback_used = True
             item.status = ItemStatus.transcription_completed
         elif text:
             item.status = ItemStatus.transcript_found
@@ -120,8 +139,24 @@ def process_video_item(db, item_id: int):
             transcript.text = text
             transcript.source = source_kind
             transcript.language = languages[0]
+            transcript.strategy = strategy
+            transcript.fallback_used = fallback_used
+            transcript.transcription_model = "faster-whisper-base-cpu-int8" if fallback_used else ""
+            transcript.error_message = ""
+            transcript.fetched_at = datetime.utcnow()
         else:
-            db.add(Transcript(video_item_id=item.id, text=text, source=source_kind, language=languages[0]))
+            db.add(
+                Transcript(
+                    video_item_id=item.id,
+                    text=text,
+                    source=source_kind,
+                    language=languages[0],
+                    strategy=strategy,
+                    fallback_used=fallback_used,
+                    transcription_model="faster-whisper-base-cpu-int8" if fallback_used else "",
+                    fetched_at=datetime.utcnow(),
+                )
+            )
 
         item.status = ItemStatus.generation_started
         provider_name = _get_setting(db, "generation_provider", "openai")
@@ -151,8 +186,19 @@ def process_video_item(db, item_id: int):
         db.flush()
         db.add(JobItem(job_id=job.id, video_item_id=item.id, status="done"))
     except Exception as exc:
-        item.status = ItemStatus.failed
+        max_attempts = max(0, source.retry_max_attempts if source else 0)
+        item.retry_count = (item.retry_count or 0) + 1
+        if item.retry_count <= max_attempts:
+            base = max(1, source.retry_backoff_minutes if source else 10)
+            mul = max(1, source.retry_backoff_multiplier if source else 2)
+            item.status = ItemStatus.retry_pending
+            item.next_retry_at = datetime.utcnow() + timedelta(minutes=base * (mul ** max(0, item.retry_count - 1)))
+        else:
+            item.status = ItemStatus.failed
         item.status_message = str(exc)
+        transcript = db.execute(select(Transcript).where(Transcript.video_item_id == item.id)).scalar_one_or_none()
+        if transcript:
+            transcript.error_message = str(exc)
         job = Job(type="process_item", status="failed", video_item_id=item.id, source_id=item.source_id, error=str(exc))
         db.add(job)
         db.flush()
