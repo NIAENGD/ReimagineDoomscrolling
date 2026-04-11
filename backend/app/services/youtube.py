@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qs, urlparse
@@ -8,19 +9,21 @@ import httpx
 
 
 YOUTUBE_FEED_BASE = "https://www.youtube.com/feeds/videos.xml"
+CHANNEL_ID_PATTERN = re.compile(r'"externalId":"(UC[0-9A-Za-z_-]{20,})"')
 
 
 def normalize_source_url(url: str) -> str:
     url = url.strip()
     if "youtube.com" not in url and "youtu.be" not in url:
         raise ValueError("Only YouTube URLs are supported")
-    if "@" in url:
-        return url.split("?")[0]
     parsed = urlparse(url)
-    if parsed.path.startswith("/channel/"):
-        return f"https://www.youtube.com{parsed.path}"
-    if parsed.path.startswith("/c/") or parsed.path.startswith("/user/"):
-        return f"https://www.youtube.com{parsed.path}"
+    path = parsed.path.rstrip("/")
+    if path.startswith("/@"):
+        return f"https://www.youtube.com{path}"
+    if path.startswith("/channel/"):
+        return f"https://www.youtube.com{path}"
+    if path.startswith("/c/") or path.startswith("/user/"):
+        return f"https://www.youtube.com{path}"
     return url
 
 
@@ -38,19 +41,28 @@ def evaluate_video_policy(video: dict, source) -> tuple[bool, str]:
     return True, "ok"
 
 
-def _feed_url_from_source_url(source_url: str) -> str:
+def _extract_channel_id_from_page(source_url: str) -> str:
+    with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+        response = client.get(source_url)
+        response.raise_for_status()
+    match = CHANNEL_ID_PATTERN.search(response.text)
+    return match.group(1) if match else ""
+
+
+def _feed_url_from_source_url(source_url: str, channel_id: str = "") -> str:
+    if channel_id:
+        return f"{YOUTUBE_FEED_BASE}?channel_id={channel_id}"
+
     parsed = urlparse(source_url)
     path = parsed.path.rstrip("/")
 
     if path.startswith("/channel/"):
-        channel_id = path.split("/", 2)[2]
-        return f"{YOUTUBE_FEED_BASE}?channel_id={channel_id}"
-    if path.startswith("/@"):
-        handle = path.split("/@", 1)[1]
-        return f"{YOUTUBE_FEED_BASE}?user={handle}"
-    if path.startswith("/user/"):
-        username = path.split("/user/", 1)[1]
-        return f"{YOUTUBE_FEED_BASE}?user={username}"
+        source_channel_id = path.split("/", 2)[2]
+        return f"{YOUTUBE_FEED_BASE}?channel_id={source_channel_id}"
+    if path.startswith("/@") or path.startswith("/c/") or path.startswith("/user/"):
+        resolved_channel_id = _extract_channel_id_from_page(source_url)
+        if resolved_channel_id:
+            return f"{YOUTUBE_FEED_BASE}?channel_id={resolved_channel_id}"
 
     query = parse_qs(parsed.query)
     if "channel_id" in query and query["channel_id"]:
@@ -121,7 +133,7 @@ def resolve_source_identity(source_url: str) -> dict:
 
 def discover_videos(source) -> list[dict]:
     try:
-        feed_url = _feed_url_from_source_url(source.url)
+        feed_url = _feed_url_from_source_url(source.canonical_url or source.url, source.channel_id or "")
     except ValueError:
         return []
 
