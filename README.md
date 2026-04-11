@@ -557,57 +557,81 @@ Use `run_app.bat` option 5, or run:
 
 ---
 
-## Deep Analysis: What Is Done vs Not Done (with Notes)
+## Deep Analysis: Function-by-Function Status (Done vs Not Done)
 
-### A) Core architecture status
-- **Done:** A real full-stack baseline exists with persistent database entities, route coverage for main UX pages, and a working ingest → transcript → generation pipeline.
-- **Not done:** Production-grade robustness (strict schemas, state-machine-grade retry semantics, richer observability, stronger auth/security defaults) is not fully implemented.
-- **Note:** This repo is best described as **feature-complete for a serious prototype**, not fully hardened for production.
+Status key used below:
+- **✅ Done**: implemented and wired in runtime.
+- **🟡 Partial**: implemented but limited, hard-coded, or not fully aligned with roadmap behavior.
+- **❌ Not done**: missing behavior expected by roadmap/acceptance intent.
 
-### B) Ingestion and source handling
-- **Done:** Real Atom feed ingestion is integrated, policy filters are applied, duplicates are prevented by source/video identity constraints.
-- **Not done:** URL normalization and channel identity resolution are still partial relative to the roadmap. Feed metadata limitations keep policy richness constrained (e.g., shorts/live inference quality).
-- **Note:** Works for many channels, but coverage consistency depends on feed format details.
+### A) Backend — Service Layer
 
-### C) Transcript strategy and fallback
-- **Done:** Subtitle retrieval + local transcription fallback path is operational.
-- **Not done:** Runtime path currently uses simplified strategy/fallback choices in processing flow; nuanced strategy matrix from plan is only partially represented.
-- **Note:** High practical utility already, but behavior under edge-failure scenarios could be made more explainable.
+| Function | Status | Evidence-based notes |
+| --- | --- | --- |
+| `normalize_source_url(url)` | 🟡 Partial | Validates YouTube URLs and normalizes `/channel/...` + handle URLs, but does not fully resolve canonical channel identity (`channel_id` is not resolved from handle/custom URLs). |
+| `evaluate_video_policy(video, source)` | 🟡 Partial | Enforces shorts/min-duration/livestream/window filters, but depends on discovery payload fields that are currently sparse (duration/is_live defaults). |
+| `_feed_url_from_source_url(source_url)` | 🟡 Partial | Supports `/channel/`, `/@handle`, and `channel_id` query. Unsupported formats fail (playlist/custom URL patterns not covered). |
+| `_parse_atom_entries(feed_xml)` | 🟡 Partial | Parses Atom entries correctly, but sets `duration=0` and `is_live=False` for all entries, constraining policy accuracy. |
+| `discover_videos(source)` | ✅ Done | Fetches Atom feed, parses entries, and returns `max_videos` bounded list with graceful failure handling. |
+| `select_transcript_strategy(source)` | 🟡 Partial | Returns stored strategy directly, but strategy is not fully enforced end-to-end in pipeline runtime. |
+| `should_fallback_to_transcription(...)` | ✅ Done | Implements decision logic for force/disable/default fallback behavior. |
+| `_extract_video_id(video_url)` | ✅ Done | Handles `youtu.be`, watch query `v=`, and embed/shorts path formats. |
+| `fetch_transcript(video_url, languages)` | ✅ Done | Retrieves transcript text via `youtube-transcript-api` and returns normalized joined transcript output. |
+| `transcribe_audio_locally(video_url, yt_dlp_command)` | ✅ Done | Downloads audio with `yt-dlp`, transcribes using Faster-Whisper CPU model, returns transcript text. |
+| `render_prompt(template, transcript, mode)` | ✅ Done | Deterministic template interpolation for mode + transcript placeholders. |
+| `_chat_completion(...)` | ✅ Done | Calls OpenAI-compatible `/chat/completions` endpoint and extracts assistant content. |
+| `generate_article(transcript, prompt, cfg)` | 🟡 Partial | Supports OpenAI + LM Studio-compatible routing, but relies on global settings and has minimal provider error taxonomy/config depth. |
+| `refresh_source(db, source_id)` | 🟡 Partial | Discovers videos, applies policy, dedups, queues/processes items, updates scan timestamps; lacks richer refresh-run accounting and lock/backoff semantics. |
+| `process_video_item(db, item_id)` | 🟡 Partial | Runs transcript/fallback/generation/versioning path; currently hard-codes strategy (`transcript_first`), language (`en`), provider/model, and prompt template instead of persisted per-source/per-settings policy. |
 
-### D) Article generation
-- **Done:** Provider switching exists between OpenAI and LM Studio-compatible endpoints via a centralized generation helper.
-- **Not done:** Prompt lifecycle controls (preset catalogs, source-level override governance, strict snapshots/metadata conventions, refusal/error taxonomy) are still thin.
-- **Note:** Integration is usable now, but prompt and quality governance need a second iteration.
+### B) Backend — API and Runtime
 
-### E) Frontend and operator UX
-- **Done:** All core operator pages are present and wired to backend routes.
-- **Not done:** Advanced UX promised in roadmap (deeper library filtering, richer reader personalization, stronger diagnostics/log drill-down, comprehensive policy editor) is incomplete.
-- **Note:** Current UI favors direct operational control over polished end-user reading experience.
+| Function | Status | Evidence-based notes |
+| --- | --- | --- |
+| `health()` | ✅ Done | Returns simple service health payload. |
+| `get_settings(...)` | ✅ Done | Returns persisted settings merged with defaults. |
+| `put_settings(...)` | ✅ Done | Upserts arbitrary key/value settings. |
+| `list_sources(...)` | ✅ Done | Lists persisted sources via ORM query. |
+| `create_source(...)` | 🟡 Partial | Creates source with normalization and basic fields, but does not resolve/persist canonical channel identity metadata. |
+| `refresh(...)` | ✅ Done | Triggers source refresh pipeline entrypoint. |
+| `patch_source(...)` | ✅ Done | Generic source patch for mutable model fields. |
+| `list_jobs(...)` | ✅ Done | Returns jobs sorted newest-first. |
+| `retry_job(...)` | 🟡 Partial | Marks job as `retry_pending` only; no worker-side retry execution mechanism implemented here. |
+| `library(...)` | 🟡 Partial | Returns article list with title search and preview, but not richer filtering/sorting/grouping described in roadmap. |
+| `article_detail(...)` | ✅ Done | Returns article and version history payload for reader view. |
+| `regenerate(...)` | ✅ Done | Reuses processing pipeline for version regeneration path. |
+| `collections(...)` | ✅ Done | Lists collections. |
+| `create_collection(...)` | 🟡 Partial | Supports creation only; edit/delete/detail association flows absent in routes. |
+| `diagnostics()` | 🟡 Partial | Includes db/queue/ffmpeg/yt-dlp/faster-whisper style checks, but several values are optimistic constants (e.g., queue/db true path). |
+| `logs(...)` | ✅ Done | Returns latest log events. |
+| `tick_sources()` | ✅ Done | Scheduler tick processes due enabled sources and advances `next_run_at`. |
+| `start_scheduler()` | ✅ Done | Prevents duplicate scheduler jobs and starts periodic ticking. |
+| `get_db()` | ✅ Done | Standard session-yield dependency with proper close semantics. |
+| `startup()` | 🟡 Partial | Bootstraps schema and scheduler for local use, but migration-first production flow is not enforced. |
 
-### F) Scheduler, jobs, and reliability controls
-- **Done:** Scheduled ticking and basic job records exist; failures are captured.
-- **Not done:** Robust retry/backoff semantics, run accounting, and deterministic lock/lease protections are limited.
-- **Note:** Acceptable for single-instance/local usage; scaling reliability needs more engineering.
+### C) Frontend (React SPA)
 
-### G) Testing and quality gate
-- **Done:** Basic unit and integration tests are present and aligned with current behavior.
-- **Not done:** Broad regression suite for edge cases and frontend behavior remains below roadmap target.
-- **Note:** Good start, but not enough to claim high confidence under rapid refactoring.
+| Function | Status | Evidence-based notes |
+| --- | --- | --- |
+| `Page(...)` | ✅ Done | Shared page container for route views. |
+| `StatCard(...)` | ✅ Done | Shared metric card component. |
+| `Layout()` | ✅ Done | Multi-page navigation and route wiring implemented. |
+| `Home()` | 🟡 Partial | Displays high-level dashboard + recent articles, but omits deeper “continue reading/scheduler health/unread” roadmap depth. |
+| `Sources()` | ✅ Done | Add/list/edit source controls and manual refresh action present. |
+| `Jobs()` | ✅ Done | Job table with retry action for failed jobs. |
+| `Library()` | 🟡 Partial | Title search and reader link available, but advanced filters/sorts/grouping are not implemented. |
+| `Reader()` | 🟡 Partial | Version switch + regenerate present, but lacks richer reader ergonomics (themes, typography controls, transcript panel, progress tracking). |
+| `Settings()` | 🟡 Partial | Generic key/value settings editor works; domain-specific grouped settings UX from roadmap not implemented. |
+| `Diagnostics()` | ✅ Done | Diagnostics payload visualized in UI. |
+| `Logs()` | 🟡 Partial | Basic log listing implemented, but no searching/filtering/severity drill-down controls. |
+| `Collections()` | 🟡 Partial | Create + list implemented, but edit/delete/detail/article assignment flows missing. |
 
-### H) Security and deployment maturity
-- **Done:** Config settings and diagnostics endpoints exist.
-- **Not done:** Hard security boundaries and deployment-grade defaults are not complete.
-- **Note:** Treat current system as a **local/self-hosted trusted environment** unless hardened further.
+### D) Progress table interpretation (based on current code)
 
----
+- The codebase is **strongest in baseline end-to-end wiring** (source creation, refresh invocation, transcript/transcription path, article generation, library/reader views). 
+- It is **partially complete in policy richness and operational hardening** (canonical identity resolution, strategy matrix completeness, retry/backoff semantics, and observability depth).
+- It is **incomplete in advanced UX and full roadmap surface area** (reader personalization, advanced filtering, comprehensive collections workflows, and broad settings coverage).
 
-## Practical Conclusion
+### Practical conclusion
 
-Overall, the project has moved beyond idea-stage: it already delivers a meaningful and usable end-to-end pipeline. The biggest remaining work is **hardening and reliability**, not initial feature creation. If development resumes, prioritize:
-1. strict API contracts,
-2. retry/backoff and refresh-run accounting,
-3. richer transcript strategy execution,
-4. frontend usability upgrades,
-5. security/config hardening.
-
-That sequence gives the highest impact-to-effort ratio for reaching a stable v1.0.
+Current state is a **working prototype with meaningful real functionality**, not a fully roadmap-complete v1. The remaining gap is mostly in **hardening + completeness**, not initial scaffolding.
