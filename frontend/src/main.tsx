@@ -64,6 +64,17 @@ type ItemTransition = {
   created_at: string;
 };
 
+type SettingField = {
+  key: string;
+  label: string;
+  type: 'text' | 'password' | 'url' | 'select' | 'range';
+  description?: string;
+  options?: Array<{ label: string; value: string }>;
+  min?: number;
+  max?: number;
+  step?: number;
+};
+
 function Page({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className='page'>
@@ -345,12 +356,172 @@ function Settings() {
 
   const merged = { ...settingsTemplate, ...(settings.data ?? {}), ...draft };
 
-  return <Page title='Settings'><article className='card'><div className='grid'>{Object.entries(merged).map(([k, v]) => <label key={k}>{k}<input value={v} onChange={(e) => setDraft((p) => ({ ...p, [k]: e.target.value }))} /></label>)}</div><button onClick={() => save.mutate(merged)}>Save settings</button></article></Page>;
+  const groups: Array<{ title: string; description: string; fields: SettingField[] }> = [
+    {
+      title: 'General',
+      description: 'Core app and interface defaults.',
+      fields: [
+        { key: 'timezone', label: 'Timezone', type: 'text', description: 'Used for schedules, logs, and timestamps.' },
+        { key: 'ui_theme_default', label: 'UI theme', type: 'select', options: [{ label: 'Dark', value: 'dark' }, { label: 'Light', value: 'light' }] },
+      ],
+    },
+    {
+      title: 'Source defaults',
+      description: 'How new sources discover and filter content.',
+      fields: [
+        { key: 'source_default_discovery_mode', label: 'Discovery mode', type: 'select', options: [{ label: 'Latest N', value: 'latest_n' }, { label: 'Rolling window', value: 'rolling_window' }] },
+        { key: 'source_default_max_videos', label: 'Max videos per run', type: 'range', min: 1, max: 100, step: 1 },
+        { key: 'source_default_rolling_window_hours', label: 'Rolling window (hours)', type: 'range', min: 1, max: 336, step: 1 },
+        { key: 'source_default_min_duration_seconds', label: 'Min duration (seconds)', type: 'range', min: 0, max: 3600, step: 30 },
+        { key: 'source_default_skip_shorts', label: 'Skip shorts', type: 'select', options: [{ label: 'Enabled', value: 'true' }, { label: 'Disabled', value: 'false' }] },
+        { key: 'source_default_dedup_policy', label: 'De-duplication', type: 'select', options: [{ label: 'Source video ID', value: 'source_video_id' }, { label: 'Title + source', value: 'title_source' }] },
+      ],
+    },
+    {
+      title: 'Transcript',
+      description: 'Language strategy and transcription engine behavior.',
+      fields: [
+        { key: 'transcript_languages', label: 'Language priority', type: 'text', description: 'Comma-separated language codes, e.g. en,es.' },
+        { key: 'transcript_first', label: 'Try transcript before ASR', type: 'select', options: [{ label: 'Enabled', value: 'true' }, { label: 'Disabled', value: 'false' }] },
+        { key: 'transcript_fallback_enabled', label: 'Allow fallback', type: 'select', options: [{ label: 'Enabled', value: 'true' }, { label: 'Disabled', value: 'false' }] },
+        { key: 'whisper_model_size', label: 'Whisper model', type: 'select', options: [{ label: 'Tiny', value: 'tiny' }, { label: 'Base', value: 'base' }, { label: 'Small', value: 'small' }, { label: 'Medium', value: 'medium' }, { label: 'Large', value: 'large' }] },
+        { key: 'transcription_cpu_threads', label: 'CPU threads', type: 'range', min: 1, max: 32, step: 1 },
+        { key: 'transcription_language_hint', label: 'Language hint', type: 'text' },
+      ],
+    },
+    {
+      title: 'Generation',
+      description: 'Model provider, quality mode, and inference limits.',
+      fields: [
+        { key: 'generation_provider', label: 'Provider', type: 'select', options: [{ label: 'OpenAI', value: 'openai' }, { label: 'LM Studio', value: 'lmstudio' }] },
+        { key: 'generation_model', label: 'Model', type: 'text' },
+        { key: 'generation_mode', label: 'Generation style', type: 'select', options: [{ label: 'Detailed', value: 'detailed' }, { label: 'Balanced', value: 'balanced' }, { label: 'Brief', value: 'brief' }] },
+        { key: 'generation_temperature', label: 'Temperature', type: 'range', min: 0, max: 2, step: 0.1 },
+        { key: 'generation_timeout_seconds', label: 'Timeout (seconds)', type: 'range', min: 5, max: 600, step: 5 },
+        { key: 'generation_max_tokens', label: 'Max tokens', type: 'range', min: 100, max: 8000, step: 50 },
+        { key: 'openai_base_url', label: 'OpenAI base URL', type: 'url' },
+        { key: 'openai_api_key', label: 'OpenAI API key', type: 'password' },
+        { key: 'lmstudio_base_url', label: 'LM Studio base URL', type: 'url' },
+      ],
+    },
+    {
+      title: 'Reader',
+      description: 'Reading experience defaults for typography and layout.',
+      fields: [
+        { key: 'reader_default_theme', label: 'Reader theme', type: 'select', options: [{ label: 'Dark', value: 'dark' }, { label: 'Light', value: 'light' }, { label: 'Sepia', value: 'sepia' }] },
+        { key: 'reader_font_family', label: 'Font family', type: 'select', options: [{ label: 'Sans', value: 'sans' }, { label: 'Serif', value: 'serif' }] },
+        { key: 'reader_font_size', label: 'Font size', type: 'range', min: 12, max: 30, step: 1 },
+        { key: 'reader_line_width', label: 'Line width (ch)', type: 'range', min: 45, max: 110, step: 1 },
+      ],
+    },
+    {
+      title: 'Scheduler',
+      description: 'Background job cadence and concurrency.',
+      fields: [
+        { key: 'scheduler_enabled', label: 'Scheduler enabled', type: 'select', options: [{ label: 'Enabled', value: 'true' }, { label: 'Disabled', value: 'false' }] },
+        { key: 'scheduler_default_cadence_minutes', label: 'Default cadence (minutes)', type: 'range', min: 1, max: 1440, step: 1 },
+        { key: 'scheduler_concurrency_cap', label: 'Concurrency cap', type: 'range', min: 1, max: 32, step: 1 },
+      ],
+    },
+  ];
+
+  const onFieldChange = (key: string, value: string) => setDraft((p) => ({ ...p, [key]: value }));
+
+  return (
+    <Page title='Settings'>
+      <article className='card settings-toolbar'>
+        <div>
+          <h2>System settings</h2>
+          <p className='muted'>Organized by area with proper controls for each option.</p>
+        </div>
+        <button onClick={() => save.mutate(merged)}>Save settings</button>
+      </article>
+      <div className='settings-grid'>
+        {groups.map((group) => (
+          <article className='card settings-group' key={group.title}>
+            <header>
+              <h3>{group.title}</h3>
+              <p className='muted'>{group.description}</p>
+            </header>
+            <div className='stack'>
+              {group.fields.map((field) => {
+                const value = merged[field.key] ?? '';
+                return (
+                  <label className='settings-field' key={field.key}>
+                    <div className='space-between'>
+                      <span>{field.label}</span>
+                      <code>{value || '—'}</code>
+                    </div>
+                    {field.type === 'select' ? (
+                      <select value={value} onChange={(e) => onFieldChange(field.key, e.target.value)}>
+                        {(field.options ?? []).map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                      </select>
+                    ) : field.type === 'range' ? (
+                      <input
+                        type='range'
+                        value={value}
+                        min={field.min}
+                        max={field.max}
+                        step={field.step}
+                        onChange={(e) => onFieldChange(field.key, e.target.value)}
+                      />
+                    ) : (
+                      <input
+                        type={field.type}
+                        value={value}
+                        onChange={(e) => onFieldChange(field.key, e.target.value)}
+                        autoComplete='off'
+                      />
+                    )}
+                    {field.description ? <small className='muted'>{field.description}</small> : null}
+                  </label>
+                );
+              })}
+            </div>
+          </article>
+        ))}
+      </div>
+    </Page>
+  );
 }
 
 function Diagnostics() {
   const diag = useQuery({ queryKey: ['diagnostics'], queryFn: async () => (await api.get('/diagnostics')).data });
-  return <Page title='Diagnostics'><div className='grid'>{Object.entries(diag.data ?? {}).map(([k, v]) => <article className='card stat' key={k}><p className='label'>{k}</p><p className='value'>{String(v)}</p></article>)}</div></Page>;
+  const renderValue = (value: unknown) => {
+    if (value === null || value === undefined) return <span className='muted'>Unavailable</span>;
+    if (typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>);
+      if (!entries.length) return <span className='muted'>No details</span>;
+      return (
+        <dl className='diag-list'>
+          {entries.map(([k, v]) => (
+            <React.Fragment key={k}>
+              <dt>{k}</dt>
+              <dd>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</dd>
+            </React.Fragment>
+          ))}
+        </dl>
+      );
+    }
+    return <span>{String(value)}</span>;
+  };
+
+  return (
+    <Page title='Diagnostics'>
+      <article className='card'>
+        <h2>Component health</h2>
+        <p className='muted'>Live status and detailed values for backend dependencies.</p>
+      </article>
+      <div className='settings-grid'>
+        {Object.entries(diag.data ?? {}).map(([k, v]) => (
+          <article className='card diag-card' key={k}>
+            <p className='label'>{k.replaceAll('_', ' ')}</p>
+            {renderValue(v)}
+          </article>
+        ))}
+      </div>
+    </Page>
+  );
 }
 
 function Logs() {
