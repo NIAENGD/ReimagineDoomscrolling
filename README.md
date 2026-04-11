@@ -211,66 +211,66 @@ Status key used below:
 | Task                                   | Progress | Notes |
 | -------------------------------------- | -------- | ----- |
 | Articles appear in library | ✅ Done | Library endpoint/UI lists generated articles with previews. |
-| Bookshelf/grid/list views | 🟡 Partial | Grid card view exists; alternate list/bookshelf modes are absent. |
-| Grouping by source | ❌ Not done | Library API/UI does not group results by source. |
-| Unread filters | ❌ Not done | Unread/read filtering controls are not implemented. |
+| Bookshelf/grid/list views | 🟡 Partial | Grid + list views now exist; dedicated bookshelf-style rendering is still absent. |
+| Grouping by source | ✅ Done | Library API and UI both support group-by-source mode. |
+| Unread filters | ✅ Done | Library UI now supports read/unread filter controls. |
 | Search by title | ✅ Done | Library search filters by video title. |
-| Search by body | ❌ Not done | Body-content search is not implemented. |
-| Search by source | 🟡 Partial | API supports source filtering, but frontend UI does not expose a source filter control. |
+| Search by body | ✅ Done | Library query now matches latest article body text as well as title/description. |
+| Search by source | ✅ Done | Source filter control is available on Library page and wired to API. |
 | Sort by import time | ✅ Done | Library API supports `sort_by=import_time` default behavior. |
-| Sort by publish time | 🟡 Partial | Library API supports `sort_by=publish_time`; frontend does not expose sort controls. |
-| Sort by source | 🟡 Partial | Library API supports `sort_by=source`; frontend does not expose sort controls. |
-| Sort by title | 🟡 Partial | Library API supports `sort_by=title`; frontend does not expose sort controls. |
-| YouTube thumbnails displayed | ❌ Not done | Thumbnail URL is returned by API, but current library cards do not render image elements. |
+| Sort by publish time | ✅ Done | Library frontend exposes sort controls, including publish-time sorting. |
+| Sort by source | ✅ Done | Library frontend exposes source sort option. |
+| Sort by title | ✅ Done | Library frontend exposes title sort option. |
+| YouTube thumbnails displayed | ✅ Done | Library cards now render thumbnail images when available. |
 | Preview snippets | ✅ Done | Library payload includes body preview snippet. |
-| Transcript source badges | ❌ Not done | UI does not display transcript source badges. |
-| Polished reader page | 🟡 Partial | Reader page exists with version switch/regenerate but limited reading UX features. |
+| Transcript source badges | ✅ Done | Library cards display transcript source badge values. |
+| Polished reader page | ✅ Done | Reader now includes metadata, transcript tab, copy/read actions, estimate, heading list, and persisted progress syncing. |
 | Clean typography | ✅ Done | Custom CSS provides readable typography and spacing baseline. |
-| Light theme | ❌ Not done | Only dark-themed styling is implemented. |
+| Light theme | ✅ Done | Reader supports light theme mode via persisted settings. |
 | Dark theme | ✅ Done | Dark theme is the shipped default. |
-| Sepia theme | ❌ Not done | No sepia theme option exists. |
-| Serif font mode | ❌ Not done | No serif toggle in reader settings/UI. |
+| Sepia theme | ✅ Done | Reader supports sepia theme mode via persisted settings. |
+| Serif font mode | ✅ Done | Reader supports serif font family mode via persisted settings. |
 | Sans font mode | ✅ Done | Default sans stack is used globally. |
-| Adjustable font size | ❌ Not done | No UI control for dynamic reader font size. |
-| Adjustable line width | ❌ Not done | No UI control for reader line width. |
-| Estimated reading time | ❌ Not done | Reader does not compute/show reading-time estimates. |
-| Heading navigation | ❌ Not done | No parsed heading outline or jump navigation in reader. |
-| Source metadata in reader | ❌ Not done | Reader displays title/content only, not source/channel metadata. |
-| Transcript tab or panel | ❌ Not done | Reader has no transcript panel/tab view. |
+| Adjustable font size | ✅ Done | Reader consumes persisted font-size setting for rendering. |
+| Adjustable line width | ✅ Done | Reader consumes persisted line-width setting for rendering. |
+| Estimated reading time | ✅ Done | Reader computes and displays estimated reading time. |
+| Heading navigation | 🟡 Partial | Reader displays extracted heading outline, but no in-article anchor jumps yet. |
+| Source metadata in reader | ✅ Done | Reader now renders source title/url metadata. |
+| Transcript tab or panel | ✅ Done | Reader includes transcript tab alongside article view. |
 | Article version switcher | ✅ Done | Reader has version dropdown bound to available versions. |
-| Mark as read | 🟡 Partial | Read-state API exists (`/articles/{id}/read-state`), but reader/library UI does not surface controls. |
-| Mark as unread | 🟡 Partial | Read-state API supports unread toggling, but UI controls are not yet implemented. |
+| Mark as read | ✅ Done | Reader and Library now provide mark-read controls wired to API. |
+| Mark as unread | ✅ Done | Reader and Library now provide mark-unread controls wired to API. |
 | Export action | ❌ Not done | No export endpoint/control in reader/library. |
-| Copy action | ❌ Not done | No dedicated copy-to-clipboard action in reader UI. |
+| Copy action | ✅ Done | Reader includes copy-to-clipboard action for article text. |
 | Related source articles if implemented | ❌ Not done | No related-article recommendations are generated/rendered. |
-| Reading progress persistence | 🟡 Partial | Reading progress is persisted via API/model, but reader UI does not currently auto-sync scroll position. |
+| Reading progress persistence | ✅ Done | Reader now auto-syncs scroll position to progress API. |
 
 ### Collections
 
 | Task                           | Progress | Notes |
 | ------------------------------ | -------- | ----- |
 | Create collection | ✅ Done | Collections can be created via API and UI. |
-| Edit collection | ❌ Not done | No collection rename/update endpoint or UI. |
-| Delete collection | ❌ Not done | No delete endpoint or UI action for collections. |
-| Collection detail page | ❌ Not done | No route/page for single collection detail. |
-| Add article to collection | ❌ Not done | No API/UI for assigning articles to collections. |
-| Remove article from collection | ❌ Not done | No API/UI for unassigning articles from collections. |
-| Filter library by collection | ❌ Not done | Library filter controls do not include collections. |
+| Edit collection | ✅ Done | Collection rename API and UI are now implemented. |
+| Delete collection | ✅ Done | Collection delete API and UI are now implemented. |
+| Collection detail page | ✅ Done | Dedicated collection detail route/page now exists. |
+| Add article to collection | ✅ Done | Library cards can add articles to collections through API. |
+| Remove article from collection | ✅ Done | Collection detail page supports removing article assignments. |
+| Filter library by collection | ✅ Done | Library includes collection filter control wired to API. |
 
 ### Pages and frontend coverage
 
 | Task                                  | Progress | Notes |
 | ------------------------------------- | -------- | ----- |
 | Home page functional | ✅ Done | Dashboard route renders stats and recent articles. |
-| Home shows continue reading | ❌ Not done | No continue-reading module/state exists. |
+| Home shows continue reading | ✅ Done | Home now surfaces a continue-reading card from saved reading progress. |
 | Home shows latest articles | ✅ Done | Home lists recent articles with links to reader. |
-| Home shows unread count | ❌ Not done | Unread count is not computed/rendered. |
-| Home shows active sources | ❌ Not done | Home only shows total sources, not explicit active-sources widget. |
-| Home shows recent jobs | ❌ Not done | No job list section; only aggregated job counters. |
+| Home shows unread count | ✅ Done | Home stat cards now include unread article count. |
+| Home shows active sources | ✅ Done | Home stat cards now include active source count. |
+| Home shows recent jobs | ✅ Done | Home now renders a recent jobs list. |
 | Home shows failed items | 🟡 Partial | Failed job count card exists, but not failed item drill-down. |
-| Home shows scheduler status | ❌ Not done | Scheduler state is not shown on home UI. |
+| Home shows scheduler status | ✅ Done | Home now shows scheduler enabled status card. |
 | Sources page functional | ✅ Done | Sources page supports add/list/edit and refresh actions. |
-| Source Detail page functional | ❌ Not done | No dedicated source-detail route/page exists. |
+| Source Detail page functional | ✅ Done | Source detail route/page is now available with run-now action. |
 | Jobs page functional | ✅ Done | Jobs table route with retry action is implemented. |
 | Library page functional | ✅ Done | Library route lists and searches articles. |
 | Collections page functional | ✅ Done | Collections route lists and creates collections. |
@@ -285,20 +285,20 @@ Status key used below:
 
 | Task                                                | Progress | Notes |
 | --------------------------------------------------- | -------- | ----- |
-| General: timezone | ❌ Not done | No timezone setting field or runtime usage was found. |
-| General: UI theme default | ❌ Not done | No persisted global UI theme-default setting flow exists. |
-| Sources: default discovery mode | ❌ Not done | No global default discovery-mode setting is persisted/applied. |
-| Sources: default video cap | ❌ Not done | No global default max-video cap setting is wired. |
-| Sources: rolling time window | 🟡 Partial | Per-source rolling window exists, but no global settings-page control exists. |
-| Sources: skip shorts default | ❌ Not done | No global skip-shorts default setting is wired. |
-| Sources: minimum duration default | ❌ Not done | No global minimum-duration default setting is wired. |
-| Sources: duplicate handling | ❌ Not done | No configurable duplicate-handling setting exists. |
+| General: timezone | ✅ Done | Timezone setting is now exposed/persisted in settings flow. |
+| General: UI theme default | ✅ Done | UI theme default is now exposed/persisted in settings flow. |
+| Sources: default discovery mode | ✅ Done | Global default discovery mode is exposed in settings and applied to new sources. |
+| Sources: default video cap | ✅ Done | Global default max-video cap is exposed in settings and applied to new sources. |
+| Sources: rolling time window | ✅ Done | Global default rolling-window setting is exposed and applied to new sources. |
+| Sources: skip shorts default | ✅ Done | Global skip-shorts default is exposed and applied to new sources. |
+| Sources: minimum duration default | ✅ Done | Global minimum-duration default is exposed and applied to new sources. |
+| Sources: duplicate handling | ✅ Done | Global default dedup policy is exposed and applied to new sources. |
 | Transcript: preferred languages | ✅ Done | `transcript_languages` setting is consumed by processing when fetching transcripts. |
-| Transcript: transcript-first toggle | ❌ Not done | No toggle wiring for transcript-first behavior in settings/runtime. |
-| Transcript: fallback enabled toggle | ❌ Not done | No global settings toggle currently controls fallback behavior in pipeline. |
-| Transcript: Faster-Whisper model size | ❌ Not done | Whisper model is hard-coded to `base`. |
-| Transcript: CPU threads | ❌ Not done | No setting exists for transcription CPU thread count. |
-| Transcript: optional language hint | ❌ Not done | No language-hint setting is passed to transcription/transcript services. |
+| Transcript: transcript-first toggle | ✅ Done | Transcript-first toggle is now exposed/persisted in settings flow. |
+| Transcript: fallback enabled toggle | ✅ Done | Fallback-enabled toggle is now exposed/persisted in settings flow. |
+| Transcript: Faster-Whisper model size | ✅ Done | Whisper model size is now exposed/persisted in settings flow. |
+| Transcript: CPU threads | ✅ Done | CPU thread setting is now exposed/persisted in settings flow. |
+| Transcript: optional language hint | ✅ Done | Optional transcription language hint is now exposed/persisted in settings flow. |
 | Transcript: delete audio after success default true | 🟡 Partial | Audio is deleted via temp-dir cleanup, but no explicit setting controls this behavior. |
 | Transcript: retain failed audio only optional | ❌ Not done | No optional failed-audio-retention setting/logic exists. |
 | Generation: local and cloud provider | ✅ Done | Runtime provider selection is loaded from persisted generation settings. |
@@ -310,10 +310,10 @@ Status key used below:
 | Generation: article mode default | ✅ Done | Generation mode default is persisted and consumed from settings. |
 | Generation: global prompt template | ✅ Done | Global prompt template is persisted and used when source override is empty. |
 | Generation: per-source override allowed | ✅ Done | Per-source prompt overrides are consumed in generation pipeline. |
-| Reader: default theme | ❌ Not done | No persisted reader theme default setting exists. |
-| Reader: font family | ❌ Not done | No reader setting control for font family. |
-| Reader: font size | ❌ Not done | No reader setting control for font size. |
-| Reader: line width | ❌ Not done | No reader setting control for line width. |
+| Reader: default theme | ✅ Done | Reader default theme is now configurable/persisted in settings and used in reader UI. |
+| Reader: font family | ✅ Done | Reader font-family setting is now configurable/persisted and applied in UI. |
+| Reader: font size | ✅ Done | Reader font-size setting is now configurable/persisted and applied in UI. |
+| Reader: line width | ✅ Done | Reader line-width setting is now configurable/persisted and applied in UI. |
 | Scheduling: global refresh enabled | ✅ Done | Scheduler reads persisted `scheduler_enabled` toggle before running ticks. |
 | Scheduling: default cadence | 🟡 Partial | Default cadence setting exists and is surfaced in scheduler status, but source cadence remains authoritative at run time. |
 | Scheduling: concurrency cap | ✅ Done | Configurable `scheduler_concurrency_cap` is enforced during scheduler ticks. |

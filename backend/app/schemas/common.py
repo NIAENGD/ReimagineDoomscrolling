@@ -22,6 +22,23 @@ class SettingsPatch(BaseModel):
     generation_max_tokens: int | None = Field(default=None, ge=64, le=12000)
     generation_mode: str | None = None
     retain_failed_audio: bool | None = None
+    timezone: str | None = None
+    ui_theme_default: str | None = None
+    source_default_discovery_mode: str | None = None
+    source_default_max_videos: int | None = Field(default=None, ge=1, le=200)
+    source_default_rolling_window_hours: int | None = Field(default=None, ge=1, le=24 * 30)
+    source_default_skip_shorts: bool | None = None
+    source_default_min_duration_seconds: int | None = Field(default=None, ge=0, le=60 * 60 * 24)
+    source_default_dedup_policy: str | None = None
+    transcript_first: bool | None = None
+    transcript_fallback_enabled: bool | None = None
+    whisper_model_size: str | None = None
+    transcription_cpu_threads: int | None = Field(default=None, ge=1, le=64)
+    transcription_language_hint: str | None = None
+    reader_default_theme: str | None = None
+    reader_font_family: str | None = None
+    reader_font_size: int | None = Field(default=None, ge=12, le=30)
+    reader_line_width: int | None = Field(default=None, ge=45, le=120)
 
 
 class CollectionCreate(BaseModel):
