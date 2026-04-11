@@ -45,11 +45,11 @@ def fetch_transcript(video_url: str, languages: list[str]) -> tuple[str, str]:
     return text, "youtube_transcript"
 
 
-def transcribe_audio_locally(video_url: str) -> str:
+def transcribe_audio_locally(video_url: str, yt_dlp_command: str = "yt-dlp") -> str:
     with tempfile.TemporaryDirectory(prefix="reimagine_transcribe_") as temp_dir:
         audio_path = os.path.join(temp_dir, "audio.%(ext)s")
         cmd = [
-            "yt-dlp",
+            yt_dlp_command,
             "-f",
             "bestaudio/best",
             "-x",

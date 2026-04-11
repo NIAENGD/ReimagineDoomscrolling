@@ -322,6 +322,16 @@ function Reader() {
 function Settings() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const settingsTemplate = useMemo(
+    () => ({
+      ffmpeg_path: '',
+      yt_dlp_path: '',
+      openai_api_key: '',
+      openai_base_url: 'https://api.openai.com/v1',
+      lmstudio_base_url: 'http://localhost:1234/v1',
+    }),
+    [],
+  );
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
 
   const save = useMutation({
@@ -329,11 +339,15 @@ function Settings() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
   });
 
-  const merged = { ...(settings.data ?? {}), ...draft };
+  const merged = { ...settingsTemplate, ...(settings.data ?? {}), ...draft };
 
   return (
     <Page title='Settings'>
       <article className='card'>
+        <p className='muted'>
+          If diagnostics shows <code>ffmpeg: false</code>, set <code>ffmpeg_path</code> to your executable path (for example,
+          <code> C:\ffmpeg\bin\ffmpeg.exe</code>) and save.
+        </p>
         <div className='stack'>
           {Object.entries(merged).map(([k, v]) => (
             <label key={k}>
