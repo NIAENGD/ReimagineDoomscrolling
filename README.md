@@ -68,7 +68,7 @@ Status key used below:
 | Reading progress entity | ✅ Done | `ReadingProgress` table persists per-article position/total and is updated via API. |
 | Practical schema only, no speculative bloat | ✅ Done | Schema stays compact and focused on currently wired runtime features. |
 | Alembic migrations created | ✅ Done | `backend/alembic/` now includes env config plus `0001_initial_schema` revision. |
-| Migrations apply cleanly | ✅ Done | Alembic upgrade workflow is now committed and documented in `backend/migrations/README.md`. |
+| Migrations apply cleanly | 🟡 Partial | Alembic files exist, but runtime startup still relies on `Base.metadata.create_all` rather than running `alembic upgrade`. |
 
 ### Source model and source policy
 
@@ -107,9 +107,9 @@ Status key used below:
 | Discover latest N videos | ✅ Done | Feed fetch + `max_videos` cap supports latest-N discovery. |
 | Discover all videos since last successful scan | ✅ Done | `discovery_mode=since_last_success` filters discovered entries by `last_success_at`. |
 | Discover videos within rolling window | ✅ Done | Policy evaluator rejects items outside rolling window when mode selected. |
-| Apply minimum duration filter | ✅ Done | Duration filter logic implemented in `evaluate_video_policy`. |
-| Apply skip shorts filter | ✅ Done | Short-video filter logic implemented. |
-| Apply skip livestreams filter | ✅ Done | Livestream filter logic implemented. |
+| Apply minimum duration filter | 🟡 Partial | Filter logic exists, but Atom discovery currently sets duration to `0`, so this policy cannot use real YouTube durations yet. |
+| Apply skip shorts filter | 🟡 Partial | Shorts logic exists, but current discovery payload lacks accurate duration metadata from YouTube feed responses. |
+| Apply skip livestreams filter | 🟡 Partial | Livestream filter exists, but discovered feed items currently default `is_live=False`, so live detection is effectively missing. |
 | Compare discovered items against known items | ✅ Done | Refresh query checks for existing `(source_id, video_id)`. |
 | Create new items only when eligible | ✅ Done | Only policy-eligible unseen videos are created for processing. |
 | Safely suppress duplicates | ✅ Done | Combination of unique constraint and pre-insert existence check suppresses duplicates. |
@@ -221,7 +221,7 @@ Status key used below:
 | Sort by publish time | ✅ Done | Library frontend exposes sort controls, including publish-time sorting. |
 | Sort by source | ✅ Done | Library frontend exposes source sort option. |
 | Sort by title | ✅ Done | Library frontend exposes title sort option. |
-| YouTube thumbnails displayed | ✅ Done | Library cards now render thumbnail images when available. |
+| YouTube thumbnails displayed | 🟡 Partial | UI renders thumbnails, but default discovery currently does not populate thumbnail URLs from feed entries. |
 | Preview snippets | ✅ Done | Library payload includes body preview snippet. |
 | Transcript source badges | ✅ Done | Library cards display transcript source badge values. |
 | Polished reader page | ✅ Done | Reader now includes metadata, transcript tab, copy/read actions, estimate, heading list, and persisted progress syncing. |
@@ -240,7 +240,7 @@ Status key used below:
 | Article version switcher | ✅ Done | Reader has version dropdown bound to available versions. |
 | Mark as read | ✅ Done | Reader and Library now provide mark-read controls wired to API. |
 | Mark as unread | ✅ Done | Reader and Library now provide mark-unread controls wired to API. |
-| Export action | ❌ Not done | No export endpoint/control in reader/library. |
+| Export action | 🟡 Partial | Backend export endpoint exists, but reader/library UI does not expose an export control yet. |
 | Copy action | ✅ Done | Reader includes copy-to-clipboard action for article text. |
 | Related source articles if implemented | ❌ Not done | No related-article recommendations are generated/rendered. |
 | Reading progress persistence | ✅ Done | Reader now auto-syncs scroll position to progress API. |
@@ -463,22 +463,22 @@ Primary integration scenarios now use the RealLifeLore channel URL (`https://www
 | Task                                                                                  | Progress | Notes |
 | ------------------------------------------------------------------------------------- | -------- | ----- |
 | Full stack starts successfully | 🟡 Partial | Scripts and components are present, but checklist validation is not fully proven in this audit. |
-| Migrations apply cleanly | 🟡 Partial | Startup uses `Base.metadata.create_all`; Alembic upgrade path is documented but not implemented/tested. |
+| Migrations apply cleanly | 🟡 Partial | Startup still uses `Base.metadata.create_all`; Alembic migrations are present but not the active boot path. |
 | Frontend pages are navigable and functional | ✅ Done | Sidebar routes and primary pages are wired and render data flows. |
 | Sources can be added and edited | ✅ Done | Source create and patch flows are implemented. |
-| Refresh can discover videos according to policy | ✅ Done | Discovery + policy filtering + dedup pipeline is implemented. |
+| Refresh can discover videos according to policy | 🟡 Partial | Pipeline exists, but feed-derived items currently miss duration/live metadata, limiting enforcement fidelity for related policies. |
 | Scheduled refresh works, including hourly refresh | ✅ Done | Background scheduler ticks sources and supports 60-minute cadence. |
 | Transcript retrieval works when available | ✅ Done | Transcript API integration exists in processing pipeline. |
-| Fallback transcription works when transcripts are unavailable and fallback is enabled | 🟡 Partial | Fallback path exists, but source-specific strategy flags are not yet wired in process flow. |
+| Fallback transcription works when transcripts are unavailable and fallback is enabled | ✅ Done | Pipeline uses per-source strategy and fallback flags, and calls local transcription when transcript retrieval fails/strategy requires fallback. |
 | Audio files are deleted after successful processing by default | ✅ Done | Temporary audio is created in temp dir and auto-removed. |
 | Article generation works through OpenAI | ✅ Done | Generation pipeline uses OpenAI-compatible call path. |
-| Article generation works through LM Studio | 🟡 Partial | Provider function supports LM Studio, but pipeline currently hard-codes OpenAI provider. |
+| Article generation works through LM Studio | ✅ Done | Pipeline reads persisted `generation_provider` and dispatches to LM Studio via OpenAI-compatible endpoint when selected. |
 | Articles appear in the library | ✅ Done | Generated articles are returned by `/library` and shown in the Library page. |
-| Reader page is polished and usable | 🟡 Partial | Usable basic reader exists but lacks many polish/accessibility controls in roadmap. |
-| Statuses are visible | 🟡 Partial | Job statuses are visible; full item lifecycle visibility is incomplete. |
-| Failures are retryable | 🟡 Partial | Job retry endpoint exists but robust retry orchestration is limited. |
-| Logs and diagnostics are useful | 🟡 Partial | Both pages/APIs exist but depth/filtering/connectivity checks remain minimal. |
+| Reader page is polished and usable | ✅ Done | Reader includes version switching, transcript tab, copy/read controls, heading list, and persisted progress synchronization. |
+| Statuses are visible | ✅ Done | Job list plus item timeline API/UI expose processing lifecycle state transitions. |
+| Failures are retryable | ✅ Done | Failed/retry-pending items can be retried via scheduler timing, jobs retry endpoint, transcript retry endpoint, and manual reprocess API. |
+| Logs and diagnostics are useful | ✅ Done | Diagnostics include dependency/connectivity probes and logs support severity/context/query filtering with redaction. |
 | Automated tests run successfully | 🟡 Partial | Small backend test set exists; full roadmap test matrix is not implemented. |
 | No primary page is a dead placeholder | ✅ Done | Primary nav routes render working UI components, not blank placeholders. |
-| No critical flow requires a second implementation run to become operational | 🟡 Partial | Core happy path runs, but several roadmap-critical features still require future implementation. |
+| No critical flow requires a second implementation run to become operational | 🟡 Partial | Core flows exist, but default source policy + feed metadata gaps (duration/live/thumbnail) still require manual tuning for smooth first-run behavior. |
 ---
