@@ -42,19 +42,151 @@ Use `run_app.bat` option 5, or run:
 
 ---
 
-## Progress Table (Current Repository Snapshot)
+## Progress Table (Current status)
 
-| Area | Status | What is implemented | What is not implemented / partial | Notes |
-|---|---|---|---|---|
-| Backend data model | 🟡 Mostly done | Rich entities exist for sources, items, transcripts, articles/versions, collections, jobs, logs, refresh runs. | Some modeled concepts are not fully wired in runtime logic (e.g., refresh run accounting fields are not fully exercised). | Good schema foundation for future hardening. |
-| Backend API routes | 🟡 Functional baseline | Core endpoints exist for settings, sources, refresh, jobs, library, reader, collections, diagnostics, logs. | Several mutation endpoints use permissive `dict` payloads instead of strict schemas; limited validation and invariant checks. | Works for fast iteration but contract stability is medium. |
-| Discovery pipeline | 🟡 Partially real | Real YouTube Atom feed parsing and policy filtering path exists. | Discovery only supports certain URL forms; duration/live metadata from Atom path remains minimal (`duration=0`, `is_live=False` placeholders). | Enough for first-pass ingestion, not robust ranking-quality discovery yet. |
-| Transcript/transcription | 🟡 Core path implemented | Transcript API fetch + local Whisper fallback exists with `yt-dlp` download. | Strategy handling is simplified in pipeline call sites; error categorization and policy-specific fallback behaviors are still thin. | Practical baseline, missing advanced reliability controls. |
-| Generation provider layer | 🟡 Core path implemented | Provider abstraction supports OpenAI and LM Studio/OpenAI-compatible endpoint. | Prompt management/version policy sophistication is limited; no token budgeting/safety controls yet. | Good initial abstraction point. |
-| Scheduler/jobs/retry | 🟡 Basic implementation | APScheduler source tick and `next_run_at` updates exist; jobs are recorded on item processing attempts. | No full retry state machine/backoff orchestration; retry endpoint only marks status. | Observability exists but execution semantics are still lightweight. |
-| Frontend web app | 🟡 Feature baseline | Multi-page SPA supports dashboard, source CRUD-lite, jobs list/retry, library, reader version switch, settings, diagnostics, logs, collections. | Advanced UX from plan (rich source policy editor, reader polish options, deep filters/sorts) is not complete. | Useful operator UI is in place. |
-| Test coverage | 🟡 Foundational | Unit tests + one integration test exist for key service behavior and API flow sanity. | Coverage depth is still modest vs roadmap goals; frontend component tests are limited. | Baseline guardrails exist. |
-| Security/config hardening | 🔴 Not done enough | Config and diagnostics primitives exist. | CORS/config hardening, auth modes, and stricter deployment safeguards remain roadmap items. | Biggest production-readiness gap. |
+| Area                                                                       | Status | What is implemented | What is not implemented / partial | Progress | Notes |
+| -------------------------------------------------------------------------- | ------ | ------------------- | --------------------------------- | -------- | ----- |
+| Source creation and persistent source policy model                         |        |                     |                                   |          |       |
+| Source editing, pause/resume/archive, and run-now controls                 |        |                     |                                   |          |       |
+| Source URL normalization and canonical channel resolution                  |        |                     |                                   |          |       |
+| Per-source metadata, identity, and destination shelf/collection assignment |        |                     |                                   |          |       |
+| Discovery mode: latest N videos                                            |        |                     |                                   |          |       |
+| Discovery mode: all videos since last successful scan                      |        |                     |                                   |          |       |
+| Discovery mode: rolling time window                                        |        |                     |                                   |          |       |
+| Discovery filters: minimum duration                                        |        |                     |                                   |          |       |
+| Discovery filters: skip shorts                                             |        |                     |                                   |          |       |
+| Discovery filters: skip livestreams if identifiable                        |        |                     |                                   |          |       |
+| Manual reprocess of selected discovered items                              |        |                     |                                   |          |       |
+| Refresh scheduler: global enable/disable                                   |        |                     |                                   |          |       |
+| Refresh scheduler: global default cadence                                  |        |                     |                                   |          |       |
+| Refresh scheduler: per-source cadence override                             |        |                     |                                   |          |       |
+| Refresh scheduler: hourly refresh support                                  |        |                     |                                   |          |       |
+| Refresh scheduler: next scheduled run visibility                           |        |                     |                                   |          |       |
+| Refresh scheduler: last successful run visibility                          |        |                     |                                   |          |       |
+| Refresh scheduler: missed-run handling                                     |        |                     |                                   |          |       |
+| Refresh scheduler: backoff after repeated failure                          |        |                     |                                   |          |       |
+| Refresh run persistence and audit logs                                     |        |                     |                                   |          |       |
+| Refresh pipeline: fetch source metadata                                    |        |                     |                                   |          |       |
+| Refresh pipeline: discover eligible videos by policy                       |        |                     |                                   |          |       |
+| Refresh pipeline: compare against known videos                             |        |                     |                                   |          |       |
+| Refresh pipeline: create new items only when appropriate                   |        |                     |                                   |          |       |
+| Refresh pipeline: enqueue processing for new eligible items                |        |                     |                                   |          |       |
+| Refresh pipeline: duplicate-safe behavior / idempotency                    |        |                     |                                   |          |       |
+| Durable item lifecycle state model                                         |        |                     |                                   |          |       |
+| Per-item status visibility in API                                          |        |                     |                                   |          |       |
+| Per-item status visibility in UI                                           |        |                     |                                   |          |       |
+| Transcript strategy: manual transcript only                                |        |                     |                                   |          |       |
+| Transcript strategy: prefer manual then auto transcript                    |        |                     |                                   |          |       |
+| Transcript strategy: allow auto transcript                                 |        |                     |                                   |          |       |
+| Transcript strategy: force local transcription                             |        |                     |                                   |          |       |
+| Transcript strategy: transcript first then audio fallback                  |        |                     |                                   |          |       |
+| Transcript strategy: disable fallback                                      |        |                     |                                   |          |       |
+| Preferred transcript languages support                                     |        |                     |                                   |          |       |
+| Transcript retrieval from available upstream sources                       |        |                     |                                   |          |       |
+| Audio download fallback path                                               |        |                     |                                   |          |       |
+| Faster-Whisper CPU transcription fallback                                  |        |                     |                                   |          |       |
+| Transcript persistence and transcript metadata recording                   |        |                     |                                   |          |       |
+| Audio cleanup after successful processing (default true)                   |        |                     |                                   |          |       |
+| Optional retention of failed-job audio only                                |        |                     |                                   |          |       |
+| Generation provider abstraction                                            |        |                     |                                   |          |       |
+| OpenAI generation provider support                                         |        |                     |                                   |          |       |
+| LM Studio OpenAI-compatible provider support                               |        |                     |                                   |          |       |
+| Persistent generation settings                                             |        |                     |                                   |          |       |
+| Global default prompt template                                             |        |                     |                                   |          |       |
+| Optional per-source prompt override                                        |        |                     |                                   |          |       |
+| Prompt preview / resolved prompt inspection                                |        |                     |                                   |          |       |
+| Test prompt against sample transcript                                      |        |                     |                                   |          |       |
+| Stored prompt snapshot on each article version                             |        |                     |                                   |          |       |
+| Article modes: concise article                                             |        |                     |                                   |          |       |
+| Article modes: detailed article                                            |        |                     |                                   |          |       |
+| Article modes: study notes                                                 |        |                     |                                   |          |       |
+| Article modes: executive brief                                             |        |                     |                                   |          |       |
+| Article modes: tutorial reconstruction                                     |        |                     |                                   |          |       |
+| Article generation with filler removal and substance preservation          |        |                     |                                   |          |       |
+| Article versioning on regeneration                                         |        |                     |                                   |          |       |
+| Library: bookshelf/grid/list views                                         |        |                     |                                   |          |       |
+| Library: grouping by source                                                |        |                     |                                   |          |       |
+| Library: unread filters                                                    |        |                     |                                   |          |       |
+| Library: search by title/body/source                                       |        |                     |                                   |          |       |
+| Library: sorting by import time/publish time/source/title                  |        |                     |                                   |          |       |
+| Library: YouTube thumbnails and preview snippets                           |        |                     |                                   |          |       |
+| Library: transcript source badges                                          |        |                     |                                   |          |       |
+| Reader: polished ebook-like reading experience                             |        |                     |                                   |          |       |
+| Reader: light/dark/sepia themes                                            |        |                     |                                   |          |       |
+| Reader: serif/sans font modes                                              |        |                     |                                   |          |       |
+| Reader: adjustable font size                                               |        |                     |                                   |          |       |
+| Reader: adjustable line width                                              |        |                     |                                   |          |       |
+| Reader: estimated reading time                                             |        |                     |                                   |          |       |
+| Reader: heading navigation                                                 |        |                     |                                   |          |       |
+| Reader: source metadata display                                            |        |                     |                                   |          |       |
+| Reader: transcript access panel/tab                                        |        |                     |                                   |          |       |
+| Reader: article version switcher                                           |        |                     |                                   |          |       |
+| Reader: mark read/unread                                                   |        |                     |                                   |          |       |
+| Reader: export and copy actions                                            |        |                     |                                   |          |       |
+| Collections: create/edit/delete                                            |        |                     |                                   |          |       |
+| Collections: add/remove articles                                           |        |                     |                                   |          |       |
+| Collections: collection detail and filtering                               |        |                     |                                   |          |       |
+| Home page functionality                                                    |        |                     |                                   |          |       |
+| Sources page functionality                                                 |        |                     |                                   |          |       |
+| Source Detail page functionality                                           |        |                     |                                   |          |       |
+| Jobs page functionality                                                    |        |                     |                                   |          |       |
+| Library page functionality                                                 |        |                     |                                   |          |       |
+| Collections page functionality                                             |        |                     |                                   |          |       |
+| Article Reader page functionality                                          |        |                     |                                   |          |       |
+| Settings page functionality                                                |        |                     |                                   |          |       |
+| Diagnostics page functionality                                             |        |                     |                                   |          |       |
+| Logs page functionality                                                    |        |                     |                                   |          |       |
+| Settings: General                                                          |        |                     |                                   |          |       |
+| Settings: Sources defaults                                                 |        |                     |                                   |          |       |
+| Settings: Transcript/Transcription                                         |        |                     |                                   |          |       |
+| Settings: Generation                                                       |        |                     |                                   |          |       |
+| Settings: Reader                                                           |        |                     |                                   |          |       |
+| Settings: Scheduling                                                       |        |                     |                                   |          |       |
+| Settings: Storage                                                          |        |                     |                                   |          |       |
+| Settings: Advanced                                                         |        |                     |                                   |          |       |
+| Durable backend persistence and real database                              |        |                     |                                   |          |       |
+| Alembic migrations                                                         |        |                     |                                   |          |       |
+| Background workers for long-running tasks                                  |        |                     |                                   |          |       |
+| Queue-backed processing isolation                                          |        |                     |                                   |          |       |
+| Jobs list/detail/retry/cancel API support                                  |        |                     |                                   |          |       |
+| Failure isolation per video/item                                           |        |                     |                                   |          |       |
+| Replayability / retry failed items                                         |        |                     |                                   |          |       |
+| Structured logging                                                         |        |                     |                                   |          |       |
+| Secret redaction in logs and frontend payloads                             |        |                     |                                   |          |       |
+| Diagnostics: DB connectivity                                               |        |                     |                                   |          |       |
+| Diagnostics: queue/scheduler health                                        |        |                     |                                   |          |       |
+| Diagnostics: storage writability                                           |        |                     |                                   |          |       |
+| Diagnostics: FFmpeg availability                                           |        |                     |                                   |          |       |
+| Diagnostics: yt-dlp availability/version                                   |        |                     |                                   |          |       |
+| Diagnostics: transcript dependency health                                  |        |                     |                                   |          |       |
+| Diagnostics: Faster-Whisper availability                                   |        |                     |                                   |          |       |
+| Diagnostics: OpenAI connectivity                                           |        |                     |                                   |          |       |
+| Diagnostics: LM Studio connectivity                                        |        |                     |                                   |          |       |
+| Logs viewer: filtering/searching/severity/linked context                   |        |                     |                                   |          |       |
+| REST API: settings CRUD                                                    |        |                     |                                   |          |       |
+| REST API: source CRUD and source actions                                   |        |                     |                                   |          |       |
+| REST API: source refresh trigger                                           |        |                     |                                   |          |       |
+| REST API: item detail                                                      |        |                     |                                   |          |       |
+| REST API: transcript detail/retry                                          |        |                     |                                   |          |       |
+| REST API: article list/detail/regenerate/export                            |        |                     |                                   |          |       |
+| REST API: collections CRUD                                                 |        |                     |                                   |          |       |
+| REST API: diagnostics                                                      |        |                     |                                   |          |       |
+| REST API: logs                                                             |        |                     |                                   |          |       |
+| REST API: health endpoints                                                 |        |                     |                                   |          |       |
+| Unit tests required by spec                                                |        |                     |                                   |          |       |
+| Integration tests required by spec                                         |        |                     |                                   |          |       |
+| End-to-end Playwright tests required by spec                               |        |                     |                                   |          |       |
+| Failure-path automated tests required by spec                              |        |                     |                                   |          |       |
+| Docker Compose local stack                                                 |        |                     |                                   |          |       |
+| Backend Dockerfile                                                         |        |                     |                                   |          |       |
+| Frontend Dockerfile                                                        |        |                     |                                   |          |       |
+| .env.example                                                               |        |                     |                                   |          |       |
+| Migration commands and startup/run path                                    |        |                     |                                   |          |       |
+| Seed or smoke-test fixtures                                                |        |                     |                                   |          |       |
+| Full-stack local startup success                                           |        |                     |                                   |          |       |
+| Clean migration application                                                |        |                     |                                   |          |       |
+| No-placeholder core flow compliance                                        |        |                     |                                   |          |       |
+
 
 ---
 
