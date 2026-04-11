@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models.entities import AppSetting, ItemStatus, Source, SourceState, VideoItem
+from app.models.entities import AppSetting, ItemStatus, LogEvent, Source, SourceState, Transcript, VideoItem
 from app.services.pipeline import process_video_item, refresh_source
 
 scheduler = BackgroundScheduler()
@@ -62,6 +63,7 @@ def tick_sources():
         ).scalars().all()
         for item in retry_items:
             process_video_item(db, item.id)
+        _run_retention_cleanup(db)
         db.commit()
     finally:
         db.close()
@@ -89,3 +91,36 @@ def start_scheduler():
         return
     scheduler.add_job(tick_sources, 'interval', minutes=5, id='source_tick')
     scheduler.start()
+
+
+def _run_retention_cleanup(db):
+    now = datetime.utcnow()
+
+    log_retention_days = max(1, _int_setting(db, "log_retention_days", 30))
+    db.query(LogEvent).filter(LogEvent.created_at < now - timedelta(days=log_retention_days)).delete()
+
+    transcript_retention_days = _int_setting(db, "transcript_retention_days", 0)
+    if transcript_retention_days > 0:
+        db.query(Transcript).filter(Transcript.updated_at < now - timedelta(days=transcript_retention_days)).delete()
+
+    thumbnail_cache_ttl_days = _int_setting(db, "thumbnail_cache_ttl_days", 0)
+    if thumbnail_cache_ttl_days > 0:
+        stale_items = db.execute(
+            select(VideoItem).where(
+                VideoItem.updated_at < now - timedelta(days=thumbnail_cache_ttl_days),
+                VideoItem.thumbnail_url != "",
+            )
+        ).scalars().all()
+        for item in stale_items:
+            item.thumbnail_url = ""
+
+    temp_cleanup_ttl_hours = max(1, _int_setting(db, "temp_cleanup_ttl_hours", 24))
+    failed_audio_dir = Path("./tmp/failed_audio")
+    if failed_audio_dir.exists():
+        threshold = now - timedelta(hours=temp_cleanup_ttl_hours)
+        for file_path in failed_audio_dir.rglob("*"):
+            if not file_path.is_file():
+                continue
+            modified = datetime.utcfromtimestamp(file_path.stat().st_mtime)
+            if modified < threshold:
+                file_path.unlink(missing_ok=True)

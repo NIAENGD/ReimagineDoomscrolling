@@ -11,6 +11,8 @@ class SettingsPatch(BaseModel):
     openai_api_key: str | None = None
     openai_base_url: str | None = None
     lmstudio_base_url: str | None = None
+    generation_provider: str | None = None
+    generation_model: str | None = None
     scheduler_enabled: bool | None = None
     scheduler_default_cadence_minutes: int | None = Field(default=None, ge=5, le=24 * 60)
     scheduler_concurrency_cap: int | None = Field(default=None, ge=1, le=16)
@@ -21,7 +23,14 @@ class SettingsPatch(BaseModel):
     generation_timeout_seconds: int | None = Field(default=None, ge=5, le=300)
     generation_max_tokens: int | None = Field(default=None, ge=64, le=12000)
     generation_mode: str | None = None
+    global_prompt_template: str | None = None
     retain_failed_audio: bool | None = None
+    delete_audio_after_success: bool | None = None
+    temp_cleanup_ttl_hours: int | None = Field(default=None, ge=1, le=24 * 30)
+    transcript_retention_days: int | None = Field(default=None, ge=0, le=3650)
+    thumbnail_cache_ttl_days: int | None = Field(default=None, ge=0, le=3650)
+    log_retention_days: int | None = Field(default=None, ge=1, le=3650)
+    debug_logging: bool | None = None
     timezone: str | None = None
     ui_theme_default: str | None = None
     source_default_discovery_mode: str | None = None
@@ -52,3 +61,15 @@ class MarkReadPayload(BaseModel):
 class ReadingProgressPayload(BaseModel):
     position: int = Field(ge=0)
     total: int = Field(ge=0)
+
+
+class SavedResponse(BaseModel):
+    saved: bool
+
+
+class DeletedResponse(BaseModel):
+    deleted: bool
+
+
+class QueuedResponse(BaseModel):
+    queued: bool

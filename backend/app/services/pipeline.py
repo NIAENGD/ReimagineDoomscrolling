@@ -155,11 +155,13 @@ def process_video_item(db, item_id: int):
             yt_dlp_command = _get_setting(db, "yt_dlp_path", "yt-dlp").strip() or "yt-dlp"
             ffmpeg_command = _get_setting(db, "ffmpeg_path", "ffmpeg").strip() or "ffmpeg"
             retain_failed = _get_setting(db, "retain_failed_audio", "false").lower() in {"1", "true", "yes", "on"}
+            delete_audio_after_success = _get_setting(db, "delete_audio_after_success", "true").lower() in {"1", "true", "yes", "on"}
             text, transcribe_meta = transcribe_audio_locally(
                 item.url,
                 yt_dlp_command=yt_dlp_command,
                 ffmpeg_command=ffmpeg_command,
                 retain_audio_on_failure=retain_failed,
+                delete_audio_after_success=delete_audio_after_success,
             )
             source_kind = "local_transcription"
             fallback_used = True

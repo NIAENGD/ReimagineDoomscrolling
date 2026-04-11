@@ -43,6 +43,11 @@ class SourcePatch(BaseModel):
     retry_backoff_multiplier: int | None = Field(default=None, ge=1, le=8)
 
 
+class SourceActionResponse(BaseModel):
+    id: int
+    state: str
+
+
 class SourceOut(SourceCreate):
     id: int
     channel_id: str = ""

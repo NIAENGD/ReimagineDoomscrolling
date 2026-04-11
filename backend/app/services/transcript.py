@@ -63,6 +63,7 @@ def transcribe_audio_locally(
     ffmpeg_command: str = "ffmpeg",
     retain_audio_on_failure: bool = False,
     retention_dir: str = "./tmp/failed_audio",
+    delete_audio_after_success: bool = True,
 ) -> tuple[str, dict]:
     with tempfile.TemporaryDirectory(prefix="reimagine_transcribe_") as temp_dir:
         audio_path = os.path.join(temp_dir, "audio.%(ext)s")
@@ -104,7 +105,14 @@ def transcribe_audio_locally(
             segments, _ = model.transcribe(normalized_path)
             transcript = "\n".join(segment.text.strip() for segment in segments if segment.text.strip())
             elapsed = int(time.time() - started)
-            return transcript, {"transcription_seconds": elapsed, "audio_retained_path": ""}
+            retained = ""
+            if not delete_audio_after_success:
+                persist_dir = os.path.join(retention_dir, "successful")
+                os.makedirs(persist_dir, exist_ok=True)
+                retained = os.path.join(persist_dir, f"{video_id_from_url(video_url)}.wav")
+                with open(normalized_path, "rb") as src, open(retained, "wb") as dest:
+                    dest.write(src.read())
+            return transcript, {"transcription_seconds": elapsed, "audio_retained_path": retained}
         except Exception:
             if retain_audio_on_failure:
                 os.makedirs(retention_dir, exist_ok=True)

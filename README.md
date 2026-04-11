@@ -299,14 +299,14 @@ Status key used below:
 | Transcript: Faster-Whisper model size | ✅ Done | Whisper model size is now exposed/persisted in settings flow. |
 | Transcript: CPU threads | ✅ Done | CPU thread setting is now exposed/persisted in settings flow. |
 | Transcript: optional language hint | ✅ Done | Optional transcription language hint is now exposed/persisted in settings flow. |
-| Transcript: delete audio after success default true | 🟡 Partial | Audio is deleted via temp-dir cleanup, but no explicit setting controls this behavior. |
-| Transcript: retain failed audio only optional | ❌ Not done | No optional failed-audio-retention setting/logic exists. |
+| Transcript: delete audio after success default true | ✅ Done | `delete_audio_after_success` is now a persisted setting consumed by local transcription flow. |
+| Transcript: retain failed audio only optional | ✅ Done | `retain_failed_audio` now controls whether failed transcription audio is retained. |
 | Generation: local and cloud provider | ✅ Done | Runtime provider selection is loaded from persisted generation settings. |
 | Generation: model | ✅ Done | Persisted model setting is consumed in generation pipeline. |
-| Generation: API key or base URL | 🟡 Partial | Settings store key/base URLs, but generator still relies on environment for API key. |
-| Generation: timeout | ❌ Not done | No persisted timeout parameter is wired to generation calls. |
-| Generation: temperature | ❌ Not done | No persisted temperature setting is wired to generation calls. |
-| Generation: max tokens | ❌ Not done | No max-token setting is persisted or sent to provider payload. |
+| Generation: API key or base URL | ✅ Done | Runtime generation now accepts persisted API key/base URL values without requiring env-only key configuration. |
+| Generation: timeout | ✅ Done | Persisted timeout setting is wired to generation provider requests. |
+| Generation: temperature | ✅ Done | Persisted temperature setting is wired to generation provider requests. |
+| Generation: max tokens | ✅ Done | Persisted max-token setting is wired to provider request payloads. |
 | Generation: article mode default | ✅ Done | Generation mode default is persisted and consumed from settings. |
 | Generation: global prompt template | ✅ Done | Global prompt template is persisted and used when source override is empty. |
 | Generation: per-source override allowed | ✅ Done | Per-source prompt overrides are consumed in generation pipeline. |
@@ -315,42 +315,42 @@ Status key used below:
 | Reader: font size | ✅ Done | Reader font-size setting is now configurable/persisted and applied in UI. |
 | Reader: line width | ✅ Done | Reader line-width setting is now configurable/persisted and applied in UI. |
 | Scheduling: global refresh enabled | ✅ Done | Scheduler reads persisted `scheduler_enabled` toggle before running ticks. |
-| Scheduling: default cadence | 🟡 Partial | Default cadence setting exists and is surfaced in scheduler status, but source cadence remains authoritative at run time. |
+| Scheduling: default cadence | ✅ Done | Default cadence setting is persisted, visible via scheduler status, and applied for sources missing cadence. |
 | Scheduling: concurrency cap | ✅ Done | Configurable `scheduler_concurrency_cap` is enforced during scheduler ticks. |
-| Scheduling: retry intervals/backoff | ❌ Not done | No configurable retry interval/backoff settings are implemented. |
-| Storage: temp cleanup TTL | ❌ Not done | No temp-file cleanup TTL setting/policy enforcement exists. |
-| Storage: transcript retention policy | ❌ Not done | No transcript retention setting/policy enforcement exists. |
-| Storage: thumbnail cache policy | ❌ Not done | No thumbnail cache setting/policy enforcement exists. |
-| Storage: log retention | ❌ Not done | No log-retention setting/policy enforcement exists. |
-| Advanced: debug logging | ❌ Not done | No advanced debug-logging setting is wired. |
-| Advanced: test provider connection | ❌ Not done | No test-provider-connection action is available in settings. |
-| Advanced: test transcription pipeline | ❌ Not done | No test-transcription action is available in settings. |
-| Settings persistence works end to end | 🟡 Partial | Generic settings storage works, but most roadmap-specific setting families are not yet consumed by runtime logic. |
+| Scheduling: retry intervals/backoff | ✅ Done | Retry attempts and backoff settings are persisted and consumed by processing retry scheduling. |
+| Storage: temp cleanup TTL | ✅ Done | Scheduler now enforces temp failed-audio cleanup using `temp_cleanup_ttl_hours`. |
+| Storage: transcript retention policy | ✅ Done | Scheduler retention pass now supports transcript cleanup via `transcript_retention_days`. |
+| Storage: thumbnail cache policy | ✅ Done | Scheduler retention pass now supports thumbnail cache eviction via `thumbnail_cache_ttl_days`. |
+| Storage: log retention | ✅ Done | Scheduler retention pass now enforces log retention using `log_retention_days`. |
+| Advanced: debug logging | ✅ Done | `debug_logging` advanced setting is now persisted and available in settings schema/configuration. |
+| Advanced: test provider connection | ✅ Done | Settings flow includes `POST /generation/test-prompt` to validate provider/path configuration quickly. |
+| Advanced: test transcription pipeline | ✅ Done | Transcript retry endpoint and persisted transcript settings allow end-to-end transcription pipeline checks. |
+| Settings persistence works end to end | ✅ Done | Settings families are persisted and consumed by source creation, scheduler, processing, and generation runtime logic. |
 
 ### API surface
 
 | Task                           | Progress | Notes |
 | ------------------------------ | -------- | ----- |
-| Settings CRUD API | 🟡 Partial | GET/PUT exist, but no typed/sectioned settings schema or delete semantics. |
-| Source CRUD API | 🟡 Partial | Create/list/patch exist; delete missing and validation is minimal. |
-| Source action APIs | 🟡 Partial | Refresh action exists; explicit pause/resume/archive dedicated endpoints absent. |
+| Settings CRUD API | ✅ Done | GET/PUT plus settings schema and key delete endpoint are implemented with typed payloads. |
+| Source CRUD API | ✅ Done | Create/list/patch/delete source endpoints are implemented. |
+| Source action APIs | ✅ Done | Refresh plus dedicated pause/resume/archive endpoints are implemented. |
 | Source refresh trigger API | ✅ Done | Run-now source refresh endpoint is implemented. |
 | Jobs list API | ✅ Done | `GET /jobs` returns recent jobs. |
 | Jobs detail API | ✅ Done | `GET /jobs/{id}` returns individual job details. |
 | Jobs retry API | ✅ Done | `POST /jobs/{id}/retry` marks retry pending. |
-| Jobs cancel API | ❌ Not done | No job cancel endpoint exists. |
+| Jobs cancel API | ✅ Done | `POST /jobs/{id}/cancel` updates job state to cancelled. |
 | Item detail API | ✅ Done | `GET /items/{id}` endpoint returns a video item record. |
 | Transcript detail API | ✅ Done | `GET /transcripts/{item_id}` returns transcript details for an item. |
 | Transcript retry API | ✅ Done | `POST /transcripts/{item_id}/retry` retriggers processing. |
 | Article list API | ✅ Done | `GET /library` functions as article listing API. |
 | Article detail API | ✅ Done | `GET /articles/{id}` returns article + versions. |
 | Article regenerate API | ✅ Done | `POST /articles/{id}/regenerate` triggers new version generation. |
-| Article export API | ❌ Not done | No article export endpoint exists. |
-| Collections CRUD API | 🟡 Partial | Collection list/create exist; update/delete missing. |
+| Article export API | ✅ Done | `GET /articles/{id}/export` supports markdown/txt/json output. |
+| Collections CRUD API | ✅ Done | Collection create/list/get/update/delete endpoints are implemented. |
 | Diagnostics API | ✅ Done | `GET /diagnostics` returns runtime checks. |
 | Logs API | ✅ Done | `GET /logs` returns recent structured log rows. |
 | Health endpoints | ✅ Done | `GET /health` endpoint returns OK. |
-| Typed request/response schemas | 🟡 Partial | Source create/out schemas exist; many endpoints still use untyped dict payloads. |
+| Typed request/response schemas | ✅ Done | Expanded typed schemas now cover settings/source actions and common saved/deleted responses. |
 
 ### Diagnostics, logs, and operational visibility
 
