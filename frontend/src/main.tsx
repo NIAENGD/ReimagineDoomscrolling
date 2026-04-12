@@ -41,6 +41,8 @@ type LibraryItem = {
   version: number;
   body_preview: string;
   video_item_id: number;
+  video_id?: string;
+  video_url?: string;
   source_title: string;
   source_id: number;
   thumbnail_url: string;
@@ -122,7 +124,12 @@ function Home() {
       <article className='card'>
         <h2>Latest articles</h2>
         <ul className='stack'>
-          {(library.data ?? []).slice(0, 6).map((item) => <li key={item.article_id}><Link to={`/reader/${item.article_id}`}>{item.title}</Link></li>)}
+          {(library.data ?? []).slice(0, 6).map((item) => (
+            <li key={item.article_id}>
+              <Link to={`/reader/${item.article_id}`}>{item.title}</Link>
+              <div className='muted'>Channel: {item.source_title || 'Unknown source'}</div>
+            </li>
+          ))}
         </ul>
       </article>
       <article className='card'>
@@ -201,30 +208,42 @@ function Library() {
   const queryClient = useQueryClient();
   const q = params.get('q') ?? '';
   const source = params.get('source') ?? '';
+  const selectedChannel = params.get('channel') ?? 'all';
   const read_state = params.get('read_state') ?? '';
   const sort_by = params.get('sort_by') ?? 'import_time';
   const view = params.get('view') ?? 'grid';
   const collection_id = params.get('collection_id') ?? '';
-  const group_by_source = params.get('group_by_source') === 'true';
 
   const collections = useQuery({ queryKey: ['collections'], queryFn: async () => (await api.get('/collections')).data as Collection[] });
   const library = useQuery({
-    queryKey: ['library', q, source, read_state, sort_by, collection_id, group_by_source],
-    queryFn: async () => (await api.get('/library', { params: { q, source, read_state, sort_by, collection_id: collection_id || undefined, group_by_source } })).data,
+    queryKey: ['library', q, source, read_state, sort_by, collection_id],
+    queryFn: async () => (await api.get('/library', { params: { q, source, read_state, sort_by, collection_id: collection_id || undefined } })).data,
   });
-  const grouped = Array.isArray(library.data) && library.data.length > 0 && 'items' in library.data[0];
-  const entries: LibraryItem[] = grouped ? (library.data as any[]).flatMap((g) => g.items) : ((library.data ?? []) as LibraryItem[]);
+  const entries = (library.data ?? []) as LibraryItem[];
+  const channels = useMemo(
+    () => ['all', ...Array.from(new Set(entries.map((item) => item.source_title).filter(Boolean))).sort((a, b) => a.localeCompare(b))],
+    [entries],
+  );
+  const visibleEntries = selectedChannel === 'all' ? entries : entries.filter((item) => item.source_title === selectedChannel);
 
   const markRead = useMutation({ mutationFn: async ({ articleId, isRead }: { articleId: number; isRead: boolean }) => api.post(`/articles/${articleId}/read-state`, { is_read: isRead }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['library'] }) });
   const addToCollection = useMutation({ mutationFn: async ({ articleId, collectionId }: { articleId: number; collectionId: number }) => api.post(`/collections/${collectionId}/articles/${articleId}`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['library'] }) });
 
   const set = (k: string, v: string) => { const next = Object.fromEntries(params.entries()); if (v) next[k] = v; else delete next[k]; setParams(next); };
 
+  const thumbnailFor = (item: LibraryItem) => {
+    if (item.thumbnail_url) return item.thumbnail_url;
+    if (item.video_id) return `https://i.ytimg.com/vi/${item.video_id}/hqdefault.jpg`;
+    const fromUrl = item.video_url?.split('v=')[1]?.split('&')[0];
+    if (fromUrl) return `https://i.ytimg.com/vi/${fromUrl}/hqdefault.jpg`;
+    return '';
+  };
+
   const cards = (items: LibraryItem[]) => (
     <div className={view === 'list' ? 'stack' : 'grid'}>
       {items.map((item) => (
         <article key={item.article_id} className='card'>
-          {item.thumbnail_url ? <img className='thumb' src={item.thumbnail_url} alt={item.title} /> : null}
+          {thumbnailFor(item) ? <img className='thumb' src={thumbnailFor(item)} alt={item.title} loading='lazy' /> : null}
           <h3>{item.title}</h3>
           <p className='muted'>{item.source_title} · v{item.version} · <span className='badge'>{item.transcript_source || 'unknown transcript'}</span></p>
           <p>{item.body_preview || 'No preview available.'}</p>
@@ -243,19 +262,34 @@ function Library() {
 
   return (
     <Page title='Library'>
-      <article className='card row'>
-        <input placeholder='Search title/body/source' defaultValue={q} onChange={(e) => set('q', e.target.value)} />
-        <select value={read_state} onChange={(e) => set('read_state', e.target.value)}><option value=''>All</option><option value='unread'>Unread</option><option value='read'>Read</option></select>
-        <select value={sort_by} onChange={(e) => set('sort_by', e.target.value)}><option value='import_time'>Import</option><option value='publish_time'>Publish</option><option value='source'>Source</option><option value='title'>Title</option></select>
-        <input placeholder='Source filter' defaultValue={source} onChange={(e) => set('source', e.target.value)} />
-        <select value={collection_id} onChange={(e) => set('collection_id', e.target.value)}><option value=''>All collections</option>{(collections.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-        <select value={view} onChange={(e) => set('view', e.target.value)}><option value='grid'>Grid</option><option value='list'>List</option></select>
-        <label><input type='checkbox' checked={group_by_source} onChange={(e) => set('group_by_source', e.target.checked ? 'true' : '')} /> Group by source</label>
-        <button onClick={() => library.refetch()}>Refresh results</button>
-      </article>
-      {grouped
-        ? (library.data as any[]).map((group) => <section key={group.source_title}><h2>{group.source_title}</h2>{cards(group.items)}</section>)
-        : cards(entries)}
+      <section className='library-shell'>
+        <aside className='card channel-filter'>
+          <h3>Channels</h3>
+          {channels.map((channel) => (
+            <button
+              key={channel}
+              type='button'
+              className={`chip ${selectedChannel === channel ? 'active' : ''}`}
+              onClick={() => {
+                set('channel', channel);
+                set('source', channel === 'all' ? '' : channel);
+              }}
+            >
+              {channel === 'all' ? 'All channels' : channel}
+            </button>
+          ))}
+        </aside>
+        <div className='library-content'>
+          <article className='card library-toolbar'>
+            <input placeholder='Search videos, channels, or article text' defaultValue={q} onChange={(e) => set('q', e.target.value)} />
+            <select value={read_state} onChange={(e) => set('read_state', e.target.value)}><option value=''>All status</option><option value='unread'>Unread</option><option value='read'>Read</option></select>
+            <select value={sort_by} onChange={(e) => set('sort_by', e.target.value)}><option value='import_time'>Newest imported</option><option value='publish_time'>Newest published</option><option value='source'>Channel A-Z</option><option value='title'>Title A-Z</option></select>
+            <select value={collection_id} onChange={(e) => set('collection_id', e.target.value)}><option value=''>All collections</option>{(collections.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+            <select value={view} onChange={(e) => set('view', e.target.value)}><option value='grid'>Grid</option><option value='list'>List</option></select>
+          </article>
+          {cards(visibleEntries)}
+        </div>
+      </section>
     </Page>
   );
 }
@@ -555,13 +589,32 @@ function Logs() {
 }
 
 function Layout() {
-  const links = [['/', 'Home'], ['/sources', 'Sources'], ['/jobs', 'Jobs'], ['/library', 'Library'], ['/collections', 'Collections'], ['/settings', 'Settings'], ['/diagnostics', 'Diagnostics'], ['/logs', 'Logs']] as const;
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const links = [
+    ['/', 'Home', '🏠'],
+    ['/sources', 'Sources', '📺'],
+    ['/jobs', 'Jobs', '🛠️'],
+    ['/library', 'Library', '📚'],
+    ['/collections', 'Collections', '🗂️'],
+    ['/settings', 'Settings', '⚙️'],
+    ['/diagnostics', 'Diagnostics', '🩺'],
+    ['/logs', 'Logs', '📜'],
+  ] as const;
   return (
-    <div className='layout'>
+    <div className={`layout ${navCollapsed ? 'nav-collapsed' : ''}`}>
       <aside>
-        <h2>ReimagineDoomscrolling</h2>
-        <p className='muted product-subtitle'>Reader OS</p>
-        <nav>{links.map(([href, label]) => <NavLink key={href} to={href} className={({ isActive }) => (isActive ? 'active' : '')} end={href === '/'}>{label}</NavLink>)}</nav>
+        <div className='sidebar-top'>
+          {!navCollapsed ? <><h2>ReimagineDoomscrolling</h2><p className='muted product-subtitle'>Reader OS</p></> : null}
+          <button type='button' className='nav-toggle' onClick={() => setNavCollapsed((v) => !v)}>{navCollapsed ? '⮞' : '⮜'}</button>
+        </div>
+        <nav>
+          {links.map(([href, label, icon]) => (
+            <NavLink key={href} to={href} className={({ isActive }) => (isActive ? 'active' : '')} end={href === '/'}>
+              <span className='nav-icon'>{icon}</span>
+              {!navCollapsed ? <span>{label}</span> : null}
+            </NavLink>
+          ))}
+        </nav>
       </aside>
       <main>
         <Routes>
