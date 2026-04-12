@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import httpx
+import re
 
 from app.core.config import settings
 
@@ -59,11 +60,27 @@ def _chat_completion(base_url: str, api_key: str, model: str, prompt: str, tempe
     return body["choices"][0]["message"]["content"].strip()
 
 
+def _clean_raw_transcript(transcript: str) -> str:
+    lines = []
+    for raw_line in transcript.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        line = re.sub(r"^\[?\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?\]?\s*[-–—]?\s*", "", line)
+        line = re.sub(r"^\d+\s*$", "", line).strip()
+        if line:
+            lines.append(line)
+    return "\n".join(lines)
+
+
 def generate_article(transcript: str, prompt: str, cfg: ProviderConfig) -> str:
     if not transcript.strip():
         return ""
 
     provider = (cfg.provider or "openai").lower()
+    if provider in {"none", "raw", "raw_transcript"}:
+        return _clean_raw_transcript(transcript)
+
     if provider == "openai":
         if not (cfg.openai_api_key or settings.openai_api_key):
             raise ValueError("OPENAI_API_KEY is required when provider is openai")
