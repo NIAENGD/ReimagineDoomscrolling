@@ -67,7 +67,7 @@ type ItemTransition = {
 type SettingField = {
   key: string;
   label: string;
-  type: 'text' | 'password' | 'url' | 'select' | 'range';
+  type: 'text' | 'password' | 'url' | 'select' | 'range' | 'textarea';
   description?: string;
   options?: Array<{ label: string; value: string }>;
   min?: number;
@@ -105,6 +105,7 @@ function Home() {
           <h2>Turn noisy video feeds into a focused reading queue.</h2>
           <p className='muted'>Track ingestion, quality, and progress without jumping between screens.</p>
         </div>
+        <button onClick={() => { sources.refetch(); jobs.refetch(); library.refetch(); scheduler.refetch(); }}>Refresh dashboard</button>
       </article>
       <div className='grid'>
         <article className='card stat'><p className='label'>Sources</p><p className='value'>{sources.data?.length ?? 0}</p></article>
@@ -235,6 +236,7 @@ function Library() {
         <select value={collection_id} onChange={(e) => set('collection_id', e.target.value)}><option value=''>All collections</option>{(collections.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         <select value={view} onChange={(e) => set('view', e.target.value)}><option value='grid'>Grid</option><option value='list'>List</option></select>
         <label><input type='checkbox' checked={group_by_source} onChange={(e) => set('group_by_source', e.target.checked ? 'true' : '')} /> Group by source</label>
+        <button onClick={() => library.refetch()}>Refresh results</button>
       </article>
       {grouped
         ? (library.data as any[]).map((group) => <section key={group.source_title}><h2>{group.source_title}</h2>{cards(group.items)}</section>)
@@ -295,6 +297,7 @@ function Reader() {
         <div className='row'>
           <label>Version <select value={version?.version ?? ''} onChange={(e) => setSelectedVersion(Number(e.target.value))}>{(detail.data?.versions ?? []).map((v: any) => <option key={v.version} value={v.version}>v{v.version}</option>)}</select></label>
           <button onClick={() => regenerate.mutate()}>Regenerate</button>
+          <button onClick={() => { detail.refetch(); transcript.refetch(); timeline.refetch(); }}>Refresh data</button>
           <button onClick={() => markRead.mutate(!detail.data?.is_read)}>{detail.data?.is_read ? 'Mark unread' : 'Mark read'}</button>
           <button onClick={() => navigator.clipboard.writeText(body)}>Copy</button>
           <span className='muted'>~{estMinutes} min read</span>
@@ -347,7 +350,7 @@ function Settings() {
     timezone: 'UTC', ui_theme_default: 'dark',
     source_default_discovery_mode: 'latest_n', source_default_max_videos: '10', source_default_rolling_window_hours: '72', source_default_skip_shorts: 'true', source_default_min_duration_seconds: '180', source_default_dedup_policy: 'source_video_id',
     transcript_languages: 'en', transcript_first: 'true', transcript_fallback_enabled: 'true', whisper_model_size: 'base', transcription_cpu_threads: '4', transcription_language_hint: '',
-    generation_provider: 'openai', generation_model: 'gpt-4.1-mini', generation_mode: 'detailed', generation_temperature: '0.2', generation_timeout_seconds: '60', generation_max_tokens: '1200', openai_api_key: '', openai_base_url: 'https://api.openai.com/v1', lmstudio_base_url: 'http://localhost:1234/v1',
+    generation_provider: 'openai', generation_model: 'gpt-4.1-mini', generation_mode: 'detailed', generation_temperature: '0.2', generation_timeout_seconds: '60', generation_max_tokens: '1200', global_prompt_template: 'Convert to {{mode}} article\n{{transcript}}', openai_api_key: '', openai_base_url: 'https://api.openai.com/v1', lmstudio_base_url: 'http://localhost:1234/v1',
     reader_default_theme: 'dark', reader_font_family: 'sans', reader_font_size: '17', reader_line_width: '72',
     scheduler_enabled: 'true', scheduler_default_cadence_minutes: '60', scheduler_concurrency_cap: '2',
   }), []);
@@ -393,9 +396,10 @@ function Settings() {
       title: 'Generation',
       description: 'Model provider, quality mode, and inference limits.',
       fields: [
-        { key: 'generation_provider', label: 'Provider', type: 'select', options: [{ label: 'OpenAI', value: 'openai' }, { label: 'LM Studio', value: 'lmstudio' }] },
+        { key: 'generation_provider', label: 'Provider', type: 'select', options: [{ label: 'No AI (raw transcript)', value: 'raw' }, { label: 'OpenAI', value: 'openai' }, { label: 'LM Studio', value: 'lmstudio' }] },
         { key: 'generation_model', label: 'Model', type: 'text' },
         { key: 'generation_mode', label: 'Generation style', type: 'select', options: [{ label: 'Detailed', value: 'detailed' }, { label: 'Balanced', value: 'balanced' }, { label: 'Brief', value: 'brief' }] },
+        { key: 'global_prompt_template', label: 'Prompt template', type: 'textarea', description: 'Used for transcript-to-article generation. Supports {{mode}} and {{transcript}} placeholders.' },
         { key: 'generation_temperature', label: 'Temperature', type: 'range', min: 0, max: 2, step: 0.1 },
         { key: 'generation_timeout_seconds', label: 'Timeout (seconds)', type: 'range', min: 5, max: 600, step: 5 },
         { key: 'generation_max_tokens', label: 'Max tokens', type: 'range', min: 100, max: 8000, step: 50 },
@@ -464,6 +468,12 @@ function Settings() {
                         max={field.max}
                         step={field.step}
                         onChange={(e) => onFieldChange(field.key, e.target.value)}
+                      />
+                    ) : field.type === 'textarea' ? (
+                      <textarea
+                        value={value}
+                        onChange={(e) => onFieldChange(field.key, e.target.value)}
+                        rows={6}
                       />
                     ) : (
                       <input

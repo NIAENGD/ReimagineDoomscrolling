@@ -77,7 +77,14 @@ main { padding: 2rem; }
   box-shadow: 0 16px 45px rgba(1, 4, 12, .45), inset 0 1px 0 rgba(197, 211, 255, .12);
 }
 .card h2, .card h3 { margin-top: 0; }
-.hero { padding: 1.4rem; background: linear-gradient(125deg, rgba(62, 107, 255, 0.33), rgba(132, 85, 218, 0.3)); }
+.hero {
+  padding: 1.4rem;
+  background: linear-gradient(125deg, rgba(62, 107, 255, 0.33), rgba(132, 85, 218, 0.3));
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
 .eyebrow { margin: 0 0 .35rem; font-size: .73rem; letter-spacing: .14em; text-transform: uppercase; color: #d6e3ff; }
 
 .stat { position: relative; overflow: hidden; }
@@ -104,7 +111,7 @@ main { padding: 2rem; }
 .linkish { background: transparent; border: none; color: #a9cbff; padding: 0; font-size: 1rem; }
 .thumb { width: 100%; max-height: 185px; object-fit: cover; border-radius: 12px; margin-bottom: .6rem; border: 1px solid rgba(167, 191, 255, 0.24); }
 
-input, select, button {
+input, select, textarea, button {
   background: var(--surface-strong);
   color: #edf2ff;
   border: 1px solid rgba(165, 189, 255, 0.27);
@@ -113,7 +120,7 @@ input, select, button {
   font: inherit;
 }
 
-input:focus, select:focus, button:focus {
+input:focus, select:focus, textarea:focus, button:focus {
   outline: 2px solid rgba(136, 177, 255, 0.54);
   outline-offset: 1px;
 }
@@ -192,6 +199,11 @@ th { color: #bfd0ff; font-weight: 600; }
 input[type="range"] {
   padding: 0;
   accent-color: #7aa2ff;
+}
+
+textarea {
+  min-height: 8rem;
+  resize: vertical;
 }
 
 .diag-card .label {
