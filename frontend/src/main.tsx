@@ -146,6 +146,10 @@ function Sources() {
     onSuccess: () => { setTitle(''); setUrl(''); queryClient.invalidateQueries({ queryKey: ['sources'] }); },
   });
   const updateSource = useMutation({ mutationFn: async ({ id, payload }: { id: number; payload: Partial<Source> }) => api.patch(`/sources/${id}`, payload), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sources'] }) });
+  const deleteSource = useMutation({
+    mutationFn: async (id: number) => api.delete(`/sources/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sources'] }),
+  });
 
   return (
     <Page title='Sources'>
@@ -165,6 +169,17 @@ function Sources() {
             <div className='row'>
               <label>State <select value={src.state} onChange={(e) => updateSource.mutate({ id: src.id, payload: { state: e.target.value } })}><option value='enabled'>Enabled</option><option value='paused'>Paused</option><option value='archived'>Archived</option></select></label>
               <label>Cadence <input type='number' defaultValue={src.cadence_minutes} onBlur={(e) => updateSource.mutate({ id: src.id, payload: { cadence_minutes: Number(e.target.value) } })} /></label>
+              <button
+                type='button'
+                onClick={() => {
+                  if (window.confirm(`Remove "${src.title || src.url}" and all imported items?`)) {
+                    deleteSource.mutate(src.id);
+                  }
+                }}
+                disabled={deleteSource.isPending}
+              >
+                Remove source
+              </button>
             </div>
           </article>
         ))}
