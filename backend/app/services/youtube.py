@@ -10,6 +10,13 @@ import httpx
 
 YOUTUBE_FEED_BASE = "https://www.youtube.com/feeds/videos.xml"
 CHANNEL_ID_PATTERN = re.compile(r'"externalId":"(UC[0-9A-Za-z_-]{20,})"')
+CHANNEL_ID_PATTERNS = (
+    CHANNEL_ID_PATTERN,
+    re.compile(r'"channelId":"(UC[0-9A-Za-z_-]{20,})"'),
+    re.compile(r'channelId=("(UC[0-9A-Za-z_-]{20,})"|\'(UC[0-9A-Za-z_-]{20,})\')'),
+    re.compile(r"https://www\.youtube\.com/channel/(UC[0-9A-Za-z_-]{20,})"),
+    re.compile(r"feeds/videos\.xml\?channel_id=(UC[0-9A-Za-z_-]{20,})"),
+)
 
 
 def _http_client() -> httpx.Client:
@@ -61,8 +68,22 @@ def _extract_channel_id_from_page(source_url: str) -> str:
     with _http_client() as client:
         response = client.get(source_url)
         response.raise_for_status()
-    match = CHANNEL_ID_PATTERN.search(response.text)
-    return match.group(1) if match else ""
+    redirected_path = urlparse(str(response.url)).path.rstrip("/")
+    if redirected_path.startswith("/channel/"):
+        redirected_channel_id = redirected_path.split("/", 2)[2]
+        if redirected_channel_id.startswith("UC"):
+            return redirected_channel_id
+
+    for pattern in CHANNEL_ID_PATTERNS:
+        match = pattern.search(response.text)
+        if not match:
+            continue
+        groups = [group for group in match.groups() if group]
+        if groups:
+            return groups[0]
+        if match.group(0).startswith("UC"):
+            return match.group(0)
+    return ""
 
 
 def _candidate_feed_urls(source_url: str, channel_id: str = "") -> list[str]:
@@ -97,14 +118,24 @@ def _candidate_feed_urls(source_url: str, channel_id: str = "") -> list[str]:
 
 
 def _fetch_feed(source_url: str, channel_id: str = "") -> tuple[list[dict], dict]:
-    for feed_url in _candidate_feed_urls(source_url, channel_id):
+    candidate_urls = _candidate_feed_urls(source_url, channel_id)
+    last_error: Exception | None = None
+    for feed_url in candidate_urls:
         try:
             with _http_client() as client:
                 response = client.get(feed_url)
                 response.raise_for_status()
-            return _parse_atom_feed(response.text)
-        except Exception:
+            videos, metadata = _parse_atom_feed(response.text)
+            if videos:
+                return videos, metadata
+            if feed_url.endswith("videos.xml") or "channel_id=" in feed_url:
+                return videos, metadata
+            last_error = ValueError(f"Empty feed response from {feed_url}")
+        except Exception as exc:
+            last_error = exc
             continue
+    if last_error:
+        raise ValueError(f"Unable to fetch feed for source URL: {last_error}") from last_error
     raise ValueError("Unable to fetch feed for source URL")
 
 
@@ -132,7 +163,10 @@ def _parse_atom_feed(feed_xml: str) -> tuple[list[dict], dict]:
             try:
                 published_at = parsedate_to_datetime(published_raw).replace(tzinfo=None)
             except (TypeError, ValueError):
-                published_at = None
+                try:
+                    published_at = datetime.fromisoformat(published_raw.replace("Z", "+00:00")).replace(tzinfo=None)
+                except ValueError:
+                    published_at = None
 
         entries.append(
             {
@@ -164,10 +198,7 @@ def resolve_source_identity(source_url: str) -> dict:
 
 
 def discover_videos(source) -> list[dict]:
-    try:
-        videos, _ = _fetch_feed(source.canonical_url or source.url, source.channel_id or "")
-    except Exception:
-        return []
+    videos, _ = _fetch_feed(source.canonical_url or source.url, source.channel_id or "")
 
     if getattr(source, "discovery_mode", "latest_n") == "since_last_success" and getattr(source, "last_success_at", None):
         videos = [
