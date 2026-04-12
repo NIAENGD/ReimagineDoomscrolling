@@ -19,6 +19,17 @@ CHANNEL_ID_PATTERNS = (
 )
 
 
+def _normalize_channel_id(raw_channel_id: str) -> str:
+    channel_id = (raw_channel_id or "").strip().strip("'\"")
+    if not channel_id:
+        return ""
+    if channel_id.startswith("UC") and re.fullmatch(r"UC[0-9A-Za-z_-]{20,}", channel_id):
+        return channel_id
+    if re.fullmatch(r"[0-9A-Za-z_-]{22,}", channel_id):
+        return f"UC{channel_id}"
+    return channel_id
+
+
 def _http_client() -> httpx.Client:
     return httpx.Client(
         timeout=20.0,
@@ -70,9 +81,11 @@ def _extract_channel_id_from_page(source_url: str) -> str:
         response.raise_for_status()
     redirected_path = urlparse(str(response.url)).path.rstrip("/")
     if redirected_path.startswith("/channel/"):
-        redirected_channel_id = redirected_path.split("/", 2)[2]
-        if redirected_channel_id.startswith("UC"):
-            return redirected_channel_id
+        redirected_parts = redirected_path.split("/")
+        if len(redirected_parts) >= 3:
+            redirected_channel_id = _normalize_channel_id(redirected_parts[2])
+            if redirected_channel_id.startswith("UC"):
+                return redirected_channel_id
 
     for pattern in CHANNEL_ID_PATTERNS:
         match = pattern.search(response.text)
@@ -80,22 +93,24 @@ def _extract_channel_id_from_page(source_url: str) -> str:
             continue
         groups = [group for group in match.groups() if group]
         if groups:
-            return groups[0]
-        if match.group(0).startswith("UC"):
-            return match.group(0)
+            return _normalize_channel_id(groups[0])
+        matched = _normalize_channel_id(match.group(0))
+        if matched.startswith("UC"):
+            return matched
     return ""
 
 
 def _candidate_feed_urls(source_url: str, channel_id: str = "") -> list[str]:
     candidates: list[str] = []
-    if channel_id:
-        return [f"{YOUTUBE_FEED_BASE}?channel_id={channel_id}"]
+    normalized_channel_id = _normalize_channel_id(channel_id)
+    if normalized_channel_id:
+        return [f"{YOUTUBE_FEED_BASE}?channel_id={normalized_channel_id}"]
 
     parsed = urlparse(source_url)
     path = parsed.path.rstrip("/")
 
     if path.startswith("/channel/"):
-        source_channel_id = path.split("/", 2)[2]
+        source_channel_id = _normalize_channel_id(path.split("/", 2)[2])
         return [f"{YOUTUBE_FEED_BASE}?channel_id={source_channel_id}"]
     if path.startswith("/@") or path.startswith("/c/") or path.startswith("/user/"):
         handle_or_name = path.split("/", 2)[1].lstrip("@")
@@ -112,7 +127,8 @@ def _candidate_feed_urls(source_url: str, channel_id: str = "") -> list[str]:
 
     query = parse_qs(parsed.query)
     if "channel_id" in query and query["channel_id"]:
-        return [f"{YOUTUBE_FEED_BASE}?channel_id={query['channel_id'][0]}"]
+        query_channel_id = _normalize_channel_id(query["channel_id"][0])
+        return [f"{YOUTUBE_FEED_BASE}?channel_id={query_channel_id}"]
 
     raise ValueError("Unsupported YouTube source URL format for discovery")
 
@@ -150,7 +166,7 @@ def _parse_atom_feed(feed_xml: str) -> tuple[list[dict], dict]:
     root = ET.fromstring(feed_xml)
     entries: list[dict] = []
     channel_title = root.findtext("atom:title", default="", namespaces=ns)
-    channel_id = root.findtext("yt:channelId", default="", namespaces=ns)
+    channel_id = _normalize_channel_id(root.findtext("yt:channelId", default="", namespaces=ns))
 
     for entry in root.findall("atom:entry", ns):
         video_id = entry.findtext("yt:videoId", default="", namespaces=ns)

@@ -4,7 +4,13 @@ import pytest
 
 from app.services.generation import ProviderConfig, generate_article, render_prompt
 from app.services.transcript import should_fallback_to_transcription
-from app.services.youtube import discover_videos, evaluate_video_policy, normalize_source_url, resolve_source_identity
+from app.services.youtube import (
+    _candidate_feed_urls,
+    discover_videos,
+    evaluate_video_policy,
+    normalize_source_url,
+    resolve_source_identity,
+)
 
 
 def test_resolve_source_identity_supports_handle_urls(monkeypatch):
@@ -100,3 +106,8 @@ def test_handle_feed_falls_back_to_channel_id_when_user_feed_is_empty(monkeypatc
     videos = discover_videos(source)
     assert len(videos) == 1
     assert videos[0]["video_id"] == "abc123"
+
+
+def test_candidate_feed_urls_repairs_legacy_channel_id_without_uc_prefix():
+    urls = _candidate_feed_urls("https://www.youtube.com/@EconomicsExplained", "Z4AMrDcNrfy3X6nsU8-rPg")
+    assert urls == ["https://www.youtube.com/feeds/videos.xml?channel_id=UCZ4AMrDcNrfy3X6nsU8-rPg"]
