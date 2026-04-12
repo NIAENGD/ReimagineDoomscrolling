@@ -246,6 +246,7 @@ def create_source(body: SourceCreate, db: Session = Depends(get_db)):
     db.add(src)
     db.commit()
     db.refresh(src)
+    refresh_source(db, src.id)
     return src
 
 

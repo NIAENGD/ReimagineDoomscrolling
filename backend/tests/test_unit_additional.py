@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from app.services.ops import redact_secrets
 from app.services.transcript import should_fallback_to_transcription
-from app.services.youtube import evaluate_video_policy
+from app.services.youtube import _candidate_feed_urls, evaluate_video_policy
 
 
 def test_dedup_key_policy_is_source_scoped_example():
@@ -49,3 +49,8 @@ def test_secret_redaction_masks_keys():
     redacted = redact_secrets(text)
     assert "supersecret" not in redacted
     assert "***redacted***" in redacted
+
+
+def test_handle_source_tries_user_feed_before_channel_lookup():
+    urls = _candidate_feed_urls("https://www.youtube.com/@EconomicsExplained")
+    assert urls[0] == "https://www.youtube.com/feeds/videos.xml?user=EconomicsExplained"
