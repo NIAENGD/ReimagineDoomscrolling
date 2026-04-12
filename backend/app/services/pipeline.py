@@ -106,6 +106,7 @@ def refresh_source(db, source_id: int):
                     video_id=raw["video_id"],
                     url=raw["url"],
                     title=raw["title"],
+                    thumbnail_url=f"https://i.ytimg.com/vi/{raw['video_id']}/hqdefault.jpg",
                     duration_seconds=int(raw.get("duration", 0) or 0),
                     status=ItemStatus.skipped_by_policy,
                     status_message=reason,
@@ -124,6 +125,7 @@ def refresh_source(db, source_id: int):
             video_id=raw["video_id"],
             url=raw["url"],
             title=raw["title"],
+            thumbnail_url=f"https://i.ytimg.com/vi/{raw['video_id']}/hqdefault.jpg",
             duration_seconds=int(raw.get("duration", 0) or 0),
             status=ItemStatus.queued,
         )
