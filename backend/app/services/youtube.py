@@ -28,9 +28,12 @@ def normalize_source_url(url: str) -> str:
 
 
 def evaluate_video_policy(video: dict, source) -> tuple[bool, str]:
-    if source.skip_shorts and video.get("duration", 0) < 60:
+    duration = video.get("duration")
+    has_duration = duration is not None and duration > 0
+
+    if source.skip_shorts and has_duration and duration < 60:
         return False, "short"
-    if video.get("duration", 0) < source.min_duration_seconds:
+    if has_duration and duration < source.min_duration_seconds:
         return False, "min_duration"
     if source.skip_livestreams and video.get("is_live"):
         return False, "livestream"
@@ -103,7 +106,7 @@ def _parse_atom_feed(feed_xml: str) -> tuple[list[dict], dict]:
                 "url": f"https://www.youtube.com/watch?v={video_id}",
                 "title": title or video_id,
                 "published_at": published_at,
-                "duration": 0,
+                "duration": None,
                 "is_live": False,
             }
         )

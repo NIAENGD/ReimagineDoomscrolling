@@ -48,6 +48,12 @@ def test_policy_eval_short_filtered():
     assert not allowed and reason == 'short'
 
 
+def test_policy_eval_unknown_duration_is_not_filtered():
+    source = SimpleNamespace(skip_shorts=True, min_duration_seconds=180, skip_livestreams=True, discovery_mode='latest_n', rolling_window_hours=72)
+    allowed, reason = evaluate_video_policy({'duration': None, 'is_live': False}, source)
+    assert allowed and reason == 'ok'
+
+
 def test_fallback_logic():
     assert should_fallback_to_transcription('transcript_first', False, True)
     assert not should_fallback_to_transcription('disable_fallback', False, True)
