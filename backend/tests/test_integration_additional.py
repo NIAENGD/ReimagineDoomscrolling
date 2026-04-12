@@ -61,3 +61,31 @@ def test_source_refresh_deduplicates_and_records_status_timeline(monkeypatch):
         timeline = client.get(f'/api/items/{item_id}/timeline')
         assert timeline.status_code == 200
         assert len(timeline.json()) >= 3
+
+
+def test_create_source_triggers_initial_refresh(monkeypatch):
+    from app.api import routes
+
+    calls: list[int] = []
+
+    monkeypatch.setattr(
+        routes,
+        "resolve_source_identity",
+        lambda url: {
+            "normalized_url": url,
+            "canonical_url": "https://www.youtube.com/channel/UCTESTCHANNEL",
+            "channel_id": "UCTESTCHANNEL",
+            "title": "Economics Explained",
+            "last_discovered_count": 0,
+        },
+    )
+    monkeypatch.setattr(routes, "refresh_source", lambda _db, source_id: calls.append(source_id))
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/sources",
+            json={"url": "https://www.youtube.com/@EconomicsExplained", "title": "Economics Explained"},
+        )
+        assert created.status_code == 200
+        source_id = created.json()["id"]
+        assert calls == [source_id]

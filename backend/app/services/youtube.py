@@ -12,6 +12,19 @@ YOUTUBE_FEED_BASE = "https://www.youtube.com/feeds/videos.xml"
 CHANNEL_ID_PATTERN = re.compile(r'"externalId":"(UC[0-9A-Za-z_-]{20,})"')
 
 
+def _http_client() -> httpx.Client:
+    return httpx.Client(
+        timeout=20.0,
+        follow_redirects=True,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            )
+        },
+    )
+
+
 def normalize_source_url(url: str) -> str:
     url = url.strip()
     if "youtube.com" not in url and "youtu.be" not in url:
@@ -45,33 +58,54 @@ def evaluate_video_policy(video: dict, source) -> tuple[bool, str]:
 
 
 def _extract_channel_id_from_page(source_url: str) -> str:
-    with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+    with _http_client() as client:
         response = client.get(source_url)
         response.raise_for_status()
     match = CHANNEL_ID_PATTERN.search(response.text)
     return match.group(1) if match else ""
 
 
-def _feed_url_from_source_url(source_url: str, channel_id: str = "") -> str:
+def _candidate_feed_urls(source_url: str, channel_id: str = "") -> list[str]:
+    candidates: list[str] = []
     if channel_id:
-        return f"{YOUTUBE_FEED_BASE}?channel_id={channel_id}"
+        return [f"{YOUTUBE_FEED_BASE}?channel_id={channel_id}"]
 
     parsed = urlparse(source_url)
     path = parsed.path.rstrip("/")
 
     if path.startswith("/channel/"):
         source_channel_id = path.split("/", 2)[2]
-        return f"{YOUTUBE_FEED_BASE}?channel_id={source_channel_id}"
+        return [f"{YOUTUBE_FEED_BASE}?channel_id={source_channel_id}"]
     if path.startswith("/@") or path.startswith("/c/") or path.startswith("/user/"):
-        resolved_channel_id = _extract_channel_id_from_page(source_url)
-        if resolved_channel_id:
-            return f"{YOUTUBE_FEED_BASE}?channel_id={resolved_channel_id}"
+        handle_or_name = path.split("/", 2)[1].lstrip("@")
+        if handle_or_name:
+            candidates.append(f"{YOUTUBE_FEED_BASE}?user={handle_or_name}")
+        try:
+            resolved_channel_id = _extract_channel_id_from_page(source_url)
+            if resolved_channel_id:
+                candidates.append(f"{YOUTUBE_FEED_BASE}?channel_id={resolved_channel_id}")
+        except Exception:
+            pass
+        if candidates:
+            return candidates
 
     query = parse_qs(parsed.query)
     if "channel_id" in query and query["channel_id"]:
-        return f"{YOUTUBE_FEED_BASE}?channel_id={query['channel_id'][0]}"
+        return [f"{YOUTUBE_FEED_BASE}?channel_id={query['channel_id'][0]}"]
 
     raise ValueError("Unsupported YouTube source URL format for discovery")
+
+
+def _fetch_feed(source_url: str, channel_id: str = "") -> tuple[list[dict], dict]:
+    for feed_url in _candidate_feed_urls(source_url, channel_id):
+        try:
+            with _http_client() as client:
+                response = client.get(feed_url)
+                response.raise_for_status()
+            return _parse_atom_feed(response.text)
+        except Exception:
+            continue
+    raise ValueError("Unable to fetch feed for source URL")
 
 
 def _parse_atom_feed(feed_xml: str) -> tuple[list[dict], dict]:
@@ -116,12 +150,7 @@ def _parse_atom_feed(feed_xml: str) -> tuple[list[dict], dict]:
 
 def resolve_source_identity(source_url: str) -> dict:
     normalized = normalize_source_url(source_url)
-    feed_url = _feed_url_from_source_url(normalized)
-
-    with httpx.Client(timeout=20.0, follow_redirects=True) as client:
-        response = client.get(feed_url)
-        response.raise_for_status()
-    entries, metadata = _parse_atom_feed(response.text)
+    entries, metadata = _fetch_feed(normalized)
 
     channel_id = metadata.get("channel_id", "")
     canonical_url = f"https://www.youtube.com/channel/{channel_id}" if channel_id else normalized
@@ -136,15 +165,7 @@ def resolve_source_identity(source_url: str) -> dict:
 
 def discover_videos(source) -> list[dict]:
     try:
-        feed_url = _feed_url_from_source_url(source.canonical_url or source.url, source.channel_id or "")
-    except ValueError:
-        return []
-
-    try:
-        with httpx.Client(timeout=20.0, follow_redirects=True) as client:
-            response = client.get(feed_url)
-            response.raise_for_status()
-        videos, _ = _parse_atom_feed(response.text)
+        videos, _ = _fetch_feed(source.canonical_url or source.url, source.channel_id or "")
     except Exception:
         return []
 
