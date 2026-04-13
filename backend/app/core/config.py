@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     lmstudio_base_url: str = "http://localhost:1234/v1"
     scheduler_enabled: bool = True
-    scheduler_default_minutes: int = 60
+    scheduler_default_minutes: int = 10
     max_workers: int = 2
     temp_dir: str = "./tmp"
 

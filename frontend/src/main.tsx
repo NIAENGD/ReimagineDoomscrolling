@@ -43,6 +43,7 @@ type LibraryItem = {
   video_item_id: number;
   video_id?: string;
   video_url?: string;
+  published_at?: string | null;
   source_title: string;
   source_id: number;
   thumbnail_url: string;
@@ -240,12 +241,14 @@ function Library() {
   };
 
   const cards = (items: LibraryItem[]) => (
-    <div className={view === 'list' ? 'stack' : 'grid'}>
+    <div className={view === 'list' ? 'stack library-cards list' : 'grid library-cards'}>
       {items.map((item) => (
         <article key={item.article_id} className='card'>
           {thumbnailFor(item) ? <img className='thumb' src={thumbnailFor(item)} alt={item.title} loading='lazy' /> : null}
           <h3>{item.title}</h3>
-          <p className='muted'>{item.source_title} · v{item.version} · <span className='badge'>{item.transcript_source || 'unknown transcript'}</span></p>
+          <p className='muted'>
+            {item.source_title} · v{item.version} · {item.published_at ? new Date(item.published_at).toLocaleDateString() : 'Unknown publish date'} · <span className='badge'>{item.transcript_source || 'unknown transcript'}</span>
+          </p>
           <p>{item.body_preview || 'No preview available.'}</p>
           <div className='row'>
             <Link to={`/reader/${item.article_id}`}>Open reader</Link>
@@ -265,6 +268,7 @@ function Library() {
       <section className='library-shell'>
         <aside className='card channel-filter'>
           <h3>Channels</h3>
+          <p className='muted'>Filter by source</p>
           {channels.map((channel) => (
             <button
               key={channel}
@@ -275,7 +279,8 @@ function Library() {
                 set('source', channel === 'all' ? '' : channel);
               }}
             >
-              {channel === 'all' ? 'All channels' : channel}
+              <span>{channel === 'all' ? 'All channels' : channel}</span>
+              <span className='muted'>{channel === 'all' ? entries.length : entries.filter((item) => item.source_title === channel).length}</span>
             </button>
           ))}
         </aside>
@@ -300,6 +305,7 @@ function Reader() {
   const articleRef = useRef<HTMLDivElement | null>(null);
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [tab, setTab] = useState<'article' | 'transcript'>('article');
+  const [isWideReader, setIsWideReader] = useState(false);
 
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
   const detail = useQuery({ queryKey: ['article', id], queryFn: async () => (await api.get(`/articles/${id}`)).data, enabled: Boolean(id) });
@@ -323,20 +329,34 @@ function Reader() {
   const headings = body.split('\n').filter((l: string) => /^#{1,3}\s+/.test(l));
 
   useEffect(() => {
-    const el = articleRef.current;
-    if (!el || !id) return;
+    const updateLayout = () => setIsWideReader(window.matchMedia('(min-width: 1360px) and (min-aspect-ratio: 4/3)').matches);
+    updateLayout();
+    window.addEventListener('resize', updateLayout);
+    return () => window.removeEventListener('resize', updateLayout);
+  }, []);
+
+  useEffect(() => {
+    if (!id) return;
     const onScroll = () => {
-      const total = Math.max(1, el.scrollHeight - el.clientHeight);
-      saveProgress.mutate({ position: Math.round(el.scrollTop), total });
+      const root = document.documentElement;
+      const total = Math.max(1, root.scrollHeight - window.innerHeight);
+      saveProgress.mutate({ position: Math.round(window.scrollY), total });
     };
-    el.addEventListener('scroll', onScroll);
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [id]);
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [id, saveProgress]);
 
   const readerTheme = settings.data?.reader_default_theme || 'dark';
   const readerFont = settings.data?.reader_font_family || 'sans';
   const readerFontSize = Number(settings.data?.reader_font_size || 17);
   const readerWidth = Number(settings.data?.reader_line_width || 72);
+  const chunks = useMemo(() => {
+    const text = tab === 'article' ? (body || 'No content available.') : (transcript.data?.text || 'Transcript unavailable.');
+    if (!isWideReader) return [text];
+    const paragraphs = text.split('\n\n');
+    const midpoint = Math.ceil(paragraphs.length / 2);
+    return [paragraphs.slice(0, midpoint).join('\n\n'), paragraphs.slice(midpoint).join('\n\n')];
+  }, [tab, body, transcript.data?.text, isWideReader]);
 
   return (
     <Page title='Reader'>
@@ -354,10 +374,10 @@ function Reader() {
         {!!headings.length && <details><summary>Headings</summary><ul>{headings.map((h, i) => <li key={i}>{h.replace(/^#{1,3}\s+/, '')}</li>)}</ul></details>}
       </article>
 
-      <article className={`card reader reader-${readerTheme} reader-font-${readerFont}`} style={{ fontSize: `${readerFontSize}px`, maxWidth: `${readerWidth}ch` }}>
+      <article className={`card reader reader-${readerTheme} reader-font-${readerFont} ${isWideReader ? 'reader-spread' : 'reader-single'}`} style={{ fontSize: `${readerFontSize}px`, maxWidth: isWideReader ? '100%' : `${readerWidth}ch` }}>
         <div className='tabs'><button className={tab === 'article' ? 'active' : ''} onClick={() => setTab('article')}>Article</button><button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>Transcript</button></div>
         <div ref={articleRef} className='reader-scroll'>
-          {tab === 'article' ? <pre>{body || 'No content available.'}</pre> : <pre>{transcript.data?.text || 'Transcript unavailable.'}</pre>}
+          {chunks.map((chunk, index) => <pre key={index}>{chunk}</pre>)}
         </div>
       </article>
       <article className='card'><h3>Processing timeline</h3><ul className='stack'>{(timeline.data ?? []).map((t) => <li key={t.id}><strong>{t.to_status}</strong> <span className='muted'>{new Date(t.created_at).toLocaleString()}</span>{t.message ? <div className='muted'>{t.message}</div> : null}</li>)}</ul></article>
@@ -396,12 +416,12 @@ function Settings() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Record<string, string>>({});
   const settingsTemplate = useMemo(() => ({
-    timezone: 'UTC', ui_theme_default: 'dark',
+    timezone: 'UTC', ui_theme_default: 'system',
     source_default_discovery_mode: 'latest_n', source_default_max_videos: '10', source_default_rolling_window_hours: '72', source_default_skip_shorts: 'true', source_default_min_duration_seconds: '180', source_default_dedup_policy: 'source_video_id',
     transcript_languages: 'en', transcript_first: 'true', transcript_fallback_enabled: 'true', whisper_model_size: 'base', transcription_cpu_threads: '4', transcription_language_hint: '',
     generation_provider: 'openai', generation_model: 'gpt-4.1-mini', generation_mode: 'detailed', generation_temperature: '0.2', generation_timeout_seconds: '60', generation_max_tokens: '1200', global_prompt_template: 'Convert to {{mode}} article\n{{transcript}}', openai_api_key: '', openai_base_url: 'https://api.openai.com/v1', lmstudio_base_url: 'http://localhost:1234/v1',
     reader_default_theme: 'dark', reader_font_family: 'sans', reader_font_size: '17', reader_line_width: '72',
-    scheduler_enabled: 'true', scheduler_default_cadence_minutes: '60', scheduler_concurrency_cap: '2',
+    scheduler_enabled: 'true', scheduler_default_cadence_minutes: '10', scheduler_concurrency_cap: '2',
   }), []);
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
   const save = useMutation({ mutationFn: async (payload: Record<string, string>) => api.put('/settings', payload), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }) });
@@ -414,7 +434,7 @@ function Settings() {
       description: 'Core app and interface defaults.',
       fields: [
         { key: 'timezone', label: 'Timezone', type: 'text', description: 'Used for schedules, logs, and timestamps.' },
-        { key: 'ui_theme_default', label: 'UI theme', type: 'select', options: [{ label: 'Dark', value: 'dark' }, { label: 'Light', value: 'light' }] },
+        { key: 'ui_theme_default', label: 'UI theme', type: 'select', options: [{ label: 'System', value: 'system' }, { label: 'Dark', value: 'dark' }, { label: 'Light', value: 'light' }] },
       ],
     },
     {
@@ -590,6 +610,27 @@ function Logs() {
 
 function Layout() {
   const [navCollapsed, setNavCollapsed] = useState(false);
+  const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
+  const [themeMode, setThemeMode] = useState<'dark' | 'light' | 'system'>('system');
+  useEffect(() => {
+    const preferredTheme = (localStorage.getItem('ui-theme-mode') as 'dark' | 'light' | 'system' | null)
+      || (settings.data?.ui_theme_default as 'dark' | 'light' | 'system' | undefined)
+      || 'system';
+    setThemeMode(preferredTheme);
+  }, [settings.data?.ui_theme_default]);
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const applyTheme = () => {
+      const resolved = themeMode === 'system' ? (media.matches ? 'dark' : 'light') : themeMode;
+      document.documentElement.setAttribute('data-theme', resolved);
+    };
+    applyTheme();
+    media.addEventListener('change', applyTheme);
+    localStorage.setItem('ui-theme-mode', themeMode);
+    return () => media.removeEventListener('change', applyTheme);
+  }, [themeMode]);
+
   const links = [
     ['/', 'Home', '🏠'],
     ['/sources', 'Sources', '📺'],
@@ -603,18 +644,32 @@ function Layout() {
   return (
     <div className={`layout ${navCollapsed ? 'nav-collapsed' : ''}`}>
       <aside>
-        <div className='sidebar-top'>
-          {!navCollapsed ? <><h2>ReimagineDoomscrolling</h2><p className='muted product-subtitle'>Reader OS</p></> : null}
-          <button type='button' className='nav-toggle' onClick={() => setNavCollapsed((v) => !v)}>{navCollapsed ? '⮞' : '⮜'}</button>
+        <div className='sidebar-shell'>
+          <div className='sidebar-top'>
+            {!navCollapsed ? <><h2>ReimagineDoomscrolling</h2><p className='muted product-subtitle'>Reader OS</p></> : null}
+            <button type='button' className='nav-toggle' onClick={() => setNavCollapsed((v) => !v)}>{navCollapsed ? '⮞' : '⮜'}</button>
+          </div>
+          <nav>
+            {links.map(([href, label, icon]) => (
+              <NavLink key={href} to={href} className={({ isActive }) => (isActive ? 'active' : '')} end={href === '/'}>
+                <span className='nav-icon'>{icon}</span>
+                {!navCollapsed ? <span>{label}</span> : null}
+              </NavLink>
+            ))}
+          </nav>
+          {!navCollapsed ? (
+            <div className='sidebar-footer'>
+              <label>
+                Theme
+                <select value={themeMode} onChange={(e) => setThemeMode(e.target.value as 'dark' | 'light' | 'system')}>
+                  <option value='system'>System</option>
+                  <option value='dark'>Dark</option>
+                  <option value='light'>Light</option>
+                </select>
+              </label>
+            </div>
+          ) : null}
         </div>
-        <nav>
-          {links.map(([href, label, icon]) => (
-            <NavLink key={href} to={href} className={({ isActive }) => (isActive ? 'active' : '')} end={href === '/'}>
-              <span className='nav-icon'>{icon}</span>
-              {!navCollapsed ? <span>{label}</span> : null}
-            </NavLink>
-          ))}
-        </nav>
       </aside>
       <main>
         <Routes>

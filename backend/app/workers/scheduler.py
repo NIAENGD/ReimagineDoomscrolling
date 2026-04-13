@@ -41,7 +41,7 @@ def tick_sources():
         sources = db.execute(select(Source).where(Source.state == SourceState.enabled)).scalars().all()
         now = datetime.utcnow()
 
-        default_cadence = max(5, _int_setting(db, "scheduler_default_cadence_minutes", 60))
+        default_cadence = max(5, _int_setting(db, "scheduler_default_cadence_minutes", 10))
         processed = 0
         for src in sources:
             if processed >= cap:
@@ -79,7 +79,7 @@ def scheduler_status() -> dict:
     try:
         enabled = _bool_setting(db, "scheduler_enabled", True)
         cap = _int_setting(db, "scheduler_concurrency_cap", 2)
-        default_cadence = _int_setting(db, "scheduler_default_cadence_minutes", 60)
+        default_cadence = _int_setting(db, "scheduler_default_cadence_minutes", 10)
         return {
             "running": scheduler.running,
             "enabled": enabled,

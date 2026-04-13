@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class SourceCreate(BaseModel):
     url: str
     title: str = ""
-    cadence_minutes: int = Field(default=60, ge=5, le=24 * 60)
+    cadence_minutes: int = Field(default=10, ge=5, le=24 * 60)
     discovery_mode: str = "latest_n"
     max_videos: int = Field(default=10, ge=1, le=200)
     rolling_window_hours: int = Field(default=72, ge=1, le=24 * 14)
