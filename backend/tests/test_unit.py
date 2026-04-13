@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.generation import ProviderConfig, generate_article, render_prompt
-from app.services.transcript import should_fallback_to_transcription
+from app.services.transcript import should_fallback_to_transcription, transcribe_audio_locally
 from app.services.youtube import (
     _candidate_feed_urls,
     discover_videos,
@@ -111,3 +111,50 @@ def test_handle_feed_falls_back_to_channel_id_when_user_feed_is_empty(monkeypatc
 def test_candidate_feed_urls_repairs_legacy_channel_id_without_uc_prefix():
     urls = _candidate_feed_urls("https://www.youtube.com/@EconomicsExplained", "Z4AMrDcNrfy3X6nsU8-rPg")
     assert urls == ["https://www.youtube.com/feeds/videos.xml?channel_id=UCZ4AMrDcNrfy3X6nsU8-rPg"]
+
+
+def test_transcribe_audio_locally_retries_yt_dlp_with_extractor_args(monkeypatch):
+    class FakeSegment:
+        text = "hello world"
+
+    class FakeModel:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def transcribe(self, _path):
+            return [FakeSegment()], {}
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, check, capture_output, text):
+        calls.append(cmd)
+        if cmd[0] == "yt-dlp" and "--extractor-args" not in cmd:
+            raise __import__("subprocess").CalledProcessError(returncode=1, cmd=cmd, stderr="primary failed")
+        return None
+
+    monkeypatch.setattr("app.services.transcript.WhisperModel", FakeModel)
+    monkeypatch.setattr("app.services.transcript.subprocess.run", fake_run)
+
+    transcript, meta = transcribe_audio_locally("https://www.youtube.com/watch?v=abc123")
+    assert transcript == "hello world"
+    assert meta["transcription_seconds"] >= 0
+    yt_dlp_calls = [cmd for cmd in calls if cmd[0] == "yt-dlp"]
+    assert len(yt_dlp_calls) == 2
+    assert "--extractor-args" in yt_dlp_calls[1]
+
+
+def test_transcribe_audio_locally_surfaces_yt_dlp_error_details(monkeypatch):
+    class FakeModel:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+    def fake_run(cmd, check, capture_output, text):
+        if cmd[0] == "yt-dlp":
+            raise __import__("subprocess").CalledProcessError(returncode=1, cmd=cmd, stderr="Sign in to confirm you’re not a bot")
+        return None
+
+    monkeypatch.setattr("app.services.transcript.WhisperModel", FakeModel)
+    monkeypatch.setattr("app.services.transcript.subprocess.run", fake_run)
+
+    with pytest.raises(RuntimeError, match="yt-dlp failed after 2 attempts"):
+        transcribe_audio_locally("https://www.youtube.com/watch?v=abc123")
