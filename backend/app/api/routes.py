@@ -51,7 +51,7 @@ DEFAULT_APP_SETTINGS = {
     "openai_base_url": "https://api.openai.com/v1",
     "lmstudio_base_url": "http://localhost:1234/v1",
     "scheduler_enabled": "true",
-    "scheduler_default_cadence_minutes": "60",
+    "scheduler_default_cadence_minutes": "10",
     "scheduler_concurrency_cap": "2",
     "retry_default_max_attempts": "2",
     "retry_default_backoff_minutes": "10",
@@ -72,7 +72,7 @@ DEFAULT_APP_SETTINGS = {
     "log_retention_days": "30",
     "debug_logging": "false",
     "timezone": "UTC",
-    "ui_theme_default": "dark",
+    "ui_theme_default": "system",
     "source_default_discovery_mode": "latest_n",
     "source_default_max_videos": "10",
     "source_default_rolling_window_hours": "72",
@@ -201,7 +201,7 @@ def create_source(body: SourceCreate, db: Session = Depends(get_db)):
         resolved = {"normalized_url": normalized, "canonical_url": normalized, "channel_id": "", "title": ""}
 
     default_cadence_row = db.execute(select(AppSetting).where(AppSetting.key == "scheduler_default_cadence_minutes")).scalar_one_or_none()
-    default_cadence = int(default_cadence_row.value) if default_cadence_row and str(default_cadence_row.value).isdigit() else 60
+    default_cadence = int(default_cadence_row.value) if default_cadence_row and str(default_cadence_row.value).isdigit() else 10
     cadence = body.cadence_minutes or default_cadence
     default_discovery_mode = db.execute(select(AppSetting).where(AppSetting.key == "source_default_discovery_mode")).scalar_one_or_none()
     default_max_videos = db.execute(select(AppSetting).where(AppSetting.key == "source_default_max_videos")).scalar_one_or_none()

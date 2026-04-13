@@ -49,7 +49,7 @@ class Source(Base):
     title: Mapped[str] = mapped_column(String(255), default="")
     metadata_json: Mapped[str] = mapped_column(Text, default="")
     state: Mapped[SourceState] = mapped_column(Enum(SourceState), default=SourceState.enabled)
-    cadence_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    cadence_minutes: Mapped[int] = mapped_column(Integer, default=10)
     discovery_mode: Mapped[str] = mapped_column(String(50), default="latest_n")
     max_videos: Mapped[int] = mapped_column(Integer, default=10)
     rolling_window_hours: Mapped[int] = mapped_column(Integer, default=72)
