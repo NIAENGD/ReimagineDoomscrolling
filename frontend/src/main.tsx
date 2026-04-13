@@ -67,6 +67,14 @@ type ItemTransition = {
   created_at: string;
 };
 
+type LogEntry = {
+  id: number;
+  severity: string;
+  context: string;
+  message: string;
+  created_at: string;
+};
+
 type SettingField = {
   key: string;
   label: string;
@@ -198,10 +206,55 @@ function Sources() {
 
 function SourceDetail() {
   const { id } = useParams();
+  const sourceId = Number(id);
   const source = useQuery({ queryKey: ['sources'], queryFn: async () => (await api.get('/sources')).data as Source[] });
-  const refresh = useMutation({ mutationFn: async () => api.post(`/sources/${id}/refresh`) });
+  const logs = useQuery({
+    queryKey: ['logs', sourceId],
+    queryFn: async () => (await api.get('/logs', { params: { source_id: sourceId } })).data as LogEntry[],
+    enabled: Number.isFinite(sourceId),
+    refetchInterval: 5000,
+  });
+  const refresh = useMutation({
+    mutationFn: async () => api.post(`/sources/${id}/refresh`),
+    onSuccess: () => {
+      source.refetch();
+      logs.refetch();
+    },
+  });
   const src = (source.data ?? []).find((s) => String(s.id) === id);
-  return <Page title='Source detail'><article className='card'><h2>{src?.title ?? 'Missing source'}</h2><p>{src?.url}</p><button onClick={() => refresh.mutate()}>Refresh now</button></article></Page>;
+  const activeLogs = (logs.data ?? []).filter((entry) => entry.context.includes(`source_id=${sourceId}`));
+  const latestLogs = activeLogs.slice(0, 10);
+
+  return (
+    <Page title='Source detail'>
+      <article className='card stack'>
+        <h2>{src?.title ?? 'Missing source'}</h2>
+        <p>{src?.url}</p>
+        <div className='row'>
+          <button onClick={() => refresh.mutate()} disabled={refresh.isPending || !src}>
+            {refresh.isPending ? 'Refreshing…' : 'Refresh now'}
+          </button>
+          <button onClick={() => logs.refetch()} disabled={logs.isFetching}>Reload activity</button>
+        </div>
+        <p className='muted'>
+          {refresh.isPending ? 'Refresh is running. Activity updates every 5 seconds.' : 'Tip: keep this page open to watch refresh progress.'}
+        </p>
+      </article>
+      <article className='card'>
+        <h3>Latest activity</h3>
+        <ul className='stack'>
+          {latestLogs.length === 0 && <li className='muted'>No source-specific logs yet.</li>}
+          {latestLogs.map((entry) => (
+            <li key={entry.id}>
+              <strong>[{entry.severity}]</strong> <span className='muted'>{new Date(entry.created_at).toLocaleString()}</span>
+              <br />
+              {entry.context}: {entry.message}
+            </li>
+          ))}
+        </ul>
+      </article>
+    </Page>
+  );
 }
 
 function Library() {

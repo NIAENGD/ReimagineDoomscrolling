@@ -708,6 +708,7 @@ def logs(
     severity: str = '',
     context: str = '',
     q: str = '',
+    source_id: int | None = None,
     db: Session = Depends(get_db),
 ):
     rows = db.execute(select(LogEvent).order_by(LogEvent.created_at.desc()).limit(500)).scalars().all()
@@ -718,6 +719,8 @@ def logs(
         if severity and row.severity.lower() != severity.lower():
             continue
         if context and context.lower() not in sanitized_context.lower():
+            continue
+        if source_id is not None and f"source_id={source_id}" not in sanitized_context:
             continue
         if q and q.lower() not in sanitized_message.lower():
             continue
