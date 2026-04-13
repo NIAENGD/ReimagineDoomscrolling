@@ -67,18 +67,47 @@ def transcribe_audio_locally(
 ) -> tuple[str, dict]:
     with tempfile.TemporaryDirectory(prefix="reimagine_transcribe_") as temp_dir:
         audio_path = os.path.join(temp_dir, "audio.%(ext)s")
-        cmd = [
-            yt_dlp_command,
-            "-f",
-            "bestaudio/best",
-            "-x",
-            "--audio-format",
-            "mp3",
-            "-o",
-            audio_path,
-            video_url,
+        yt_dlp_attempts = [
+            [
+                yt_dlp_command,
+                "--no-playlist",
+                "-f",
+                "bestaudio/best",
+                "-x",
+                "--audio-format",
+                "mp3",
+                "-o",
+                audio_path,
+                video_url,
+            ],
+            [
+                yt_dlp_command,
+                "--no-playlist",
+                "--extractor-args",
+                "youtube:player_client=android,web",
+                "-f",
+                "bestaudio/best",
+                "-x",
+                "--audio-format",
+                "mp3",
+                "-o",
+                audio_path,
+                video_url,
+            ],
         ]
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        yt_dlp_error = ""
+        for cmd in yt_dlp_attempts:
+            try:
+                subprocess.run(cmd, check=True, capture_output=True, text=True)
+                yt_dlp_error = ""
+                break
+            except subprocess.CalledProcessError as exc:
+                stderr = (exc.stderr or "").strip()
+                stdout = (exc.stdout or "").strip()
+                output = stderr or stdout or str(exc)
+                yt_dlp_error = output[-1200:]
+        if yt_dlp_error:
+            raise RuntimeError(f"yt-dlp failed after {len(yt_dlp_attempts)} attempts: {yt_dlp_error}")
         mp3_path = os.path.join(temp_dir, "audio.mp3")
         normalized_path = os.path.join(temp_dir, "audio.normalized.wav")
         subprocess.run(
