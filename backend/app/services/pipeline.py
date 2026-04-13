@@ -113,10 +113,23 @@ def refresh_source(db, source_id: int):
                 )
                 db.add(item)
             continue
-        exists_stmt = select(VideoItem).where(VideoItem.video_id == raw["video_id"])
-        if source.dedup_policy == "source_video_id":
-            exists_stmt = exists_stmt.where(VideoItem.source_id == source_id)
-        exists = existing_for_video if source.dedup_policy == "source_video_id" else db.execute(exists_stmt).scalar_one_or_none()
+        dedup_policy = (source.dedup_policy or "source_video_id").strip()
+        if dedup_policy == "source_video_id":
+            exists = existing_for_video
+        elif dedup_policy == "title_source":
+            exists = db.execute(
+                select(VideoItem).where(
+                    VideoItem.source_id == source_id,
+                    VideoItem.title == raw["title"],
+                )
+            ).scalar_one_or_none()
+        else:
+            exists = db.execute(
+                select(VideoItem).where(
+                    VideoItem.source_id == source_id,
+                    VideoItem.video_id == raw["video_id"],
+                )
+            ).scalar_one_or_none()
         if exists:
             duplicate_count += 1
             continue
