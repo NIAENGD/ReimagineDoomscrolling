@@ -255,7 +255,7 @@ def process_video_item(db, item_id: int):
         provider_name = _get_setting(db, "generation_provider", "openai")
         model_name = _get_setting(db, "generation_model", "gpt-4.1-mini")
         global_template = _get_setting(db, "global_prompt_template", "Convert the transcript into a polished article.\n\n{{transcript}}")
-        timeout_seconds = float(_get_setting(db, "generation_timeout_seconds", "60"))
+        timeout_seconds = float(_get_setting(db, "generation_timeout_seconds", "300"))
         temperature = float(_get_setting(db, "generation_temperature", "0.2"))
         max_tokens = int(_get_setting(db, "generation_max_tokens", "30000"))
         prompt_template = source.prompt_override if source and source.prompt_override else global_template
