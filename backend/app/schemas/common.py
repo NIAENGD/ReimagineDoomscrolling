@@ -30,6 +30,7 @@ class SettingsPatch(BaseModel):
     title_identifier_b: str | None = None
     title_identifier_c: str | None = None
     title_identifier_d: str | None = None
+    title_output_language: str | None = None
     retain_failed_audio: bool | None = None
     delete_audio_after_success: bool | None = None
     temp_cleanup_ttl_hours: int | None = Field(default=None, ge=1, le=24 * 30)

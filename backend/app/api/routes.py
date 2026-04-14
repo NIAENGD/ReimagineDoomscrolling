@@ -81,6 +81,7 @@ DEFAULT_APP_SETTINGS = {
     "title_identifier_b": "[/",
     "title_identifier_c": "%x",
     "title_identifier_d": "^#",
+    "title_output_language": "English",
     "transcript_languages": "en",
     "retain_failed_audio": "false",
     "delete_audio_after_success": "true",
@@ -165,6 +166,7 @@ def settings_schema():
             "title_identifier_b",
             "title_identifier_c",
             "title_identifier_d",
+            "title_output_language",
         ],
         "scheduling": [
             "scheduler_enabled",

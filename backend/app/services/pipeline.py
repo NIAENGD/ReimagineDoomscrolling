@@ -74,6 +74,7 @@ def _generate_title_and_score(
     marker_b: str,
     marker_c: str,
     marker_d: str,
+    title_output_language: str,
 ) -> tuple[str, int]:
     score_marker_start = "#s+*"
     score_marker_end = "^@$K"
@@ -82,6 +83,7 @@ def _generate_title_and_score(
         f"{score_prompt_template}\n\n"
         "You receive a transcript and original YouTube title. Rewrite to a clear, descriptive title.\n"
         "Avoid clickbait tone. Keep it factual and concise.\n"
+        f"Write the rewritten title in {title_output_language}.\n"
         "Output exactly two lines and nothing else:\n"
         f"1) Title: {marker_a}{marker_b}\"<TITLE_TEXT>\"{marker_c}{marker_d}\n"
         f"2) Score: {score_marker_start}\"<0-100_INTEGER>\"{score_marker_end}\n"
@@ -340,6 +342,7 @@ def process_video_item(db, item_id: int):
         marker_b = _get_setting(db, "title_identifier_b", "[/")
         marker_c = _get_setting(db, "title_identifier_c", "%x")
         marker_d = _get_setting(db, "title_identifier_d", "^#")
+        title_output_language = _get_setting(db, "title_output_language", "English")
         cfg = ProviderConfig(
             provider=provider_name,
             model=model_name,
@@ -376,6 +379,7 @@ def process_video_item(db, item_id: int):
                     marker_b,
                     marker_c,
                     marker_d,
+                    title_output_language,
                 )
             except Exception as exc:
                 log_event(db, "WARNING", "process_item.ai_title_score", f"AI title/score fallback: {exc}", source_id=item.source_id, item_id=item.id)
