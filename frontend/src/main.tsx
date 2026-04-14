@@ -17,6 +17,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import ReactMarkdown from 'react-markdown';
 import { api } from './lib/api';
 import './styles.css';
 
@@ -392,6 +393,7 @@ function Reader() {
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [tab, setTab] = useState<'article' | 'transcript'>('article');
   const [isWideReader, setIsWideReader] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
   const { notify } = useNotifications();
 
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
@@ -430,28 +432,38 @@ function Reader() {
     return () => window.removeEventListener('resize', updateLayout);
   }, []);
 
-  useEffect(() => {
-    if (!id) return;
-    const onScroll = () => {
-      const root = document.documentElement;
-      const total = Math.max(1, root.scrollHeight - window.innerHeight);
-      saveProgress.mutate({ position: Math.round(window.scrollY), total });
-    };
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [id, saveProgress]);
-
-  const readerTheme = settings.data?.reader_default_theme || 'dark';
   const readerFont = settings.data?.reader_font_family || 'sans';
   const readerFontSize = Number(settings.data?.reader_font_size || 17);
   const readerWidth = Number(settings.data?.reader_line_width || 72);
-  const chunks = useMemo(() => {
-    const text = tab === 'article' ? (body || 'No content available.') : (transcript.data?.text || 'Transcript unavailable.');
-    if (!isWideReader) return [text];
-    const paragraphs = text.split('\n\n');
-    const midpoint = Math.ceil(paragraphs.length / 2);
-    return [paragraphs.slice(0, midpoint).join('\n\n'), paragraphs.slice(midpoint).join('\n\n')];
-  }, [tab, body, transcript.data?.text, isWideReader]);
+  const activeContent = tab === 'article' ? (body || 'No content available.') : (transcript.data?.text || 'Transcript unavailable.');
+  const pages = useMemo(() => {
+    const paragraphs = activeContent.split(/\n{2,}/).filter(Boolean);
+    if (!paragraphs.length) return ['No content available.'];
+    const approxCharsPerLine = Math.max(42, Math.floor((isWideReader ? 108 : readerWidth) * 0.9));
+    const approxLines = Math.max(12, Math.floor((window.innerHeight * 0.62) / Math.max(14, readerFontSize * 1.6)));
+    const pageLimit = approxCharsPerLine * approxLines * (isWideReader ? 2 : 1);
+    const paged: string[] = [];
+    let current = '';
+    paragraphs.forEach((paragraph) => {
+      if ((current + paragraph).length > pageLimit && current.trim()) {
+        paged.push(current.trim());
+        current = paragraph;
+      } else {
+        current += `${current ? '\n\n' : ''}${paragraph}`;
+      }
+    });
+    if (current.trim()) paged.push(current.trim());
+    return paged.length ? paged : ['No content available.'];
+  }, [activeContent, isWideReader, readerWidth, readerFontSize]);
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [tab, version?.version, detail.data?.id, isWideReader, readerWidth, readerFontSize]);
+
+  useEffect(() => {
+    if (!id || !pages.length) return;
+    saveProgress.mutate({ position: currentPage + 1, total: pages.length });
+  }, [currentPage, id, pages.length, saveProgress]);
 
   return (
     <Page title='Reader'>
@@ -469,10 +481,15 @@ function Reader() {
         {!!headings.length && <details><summary>Headings</summary><ul>{headings.map((h, i) => <li key={i}>{h.replace(/^#{1,3}\s+/, '')}</li>)}</ul></details>}
       </article>
 
-      <article className={`card reader reader-${readerTheme} reader-font-${readerFont} ${isWideReader ? 'reader-spread' : 'reader-single'}`} style={{ fontSize: `${readerFontSize}px`, maxWidth: isWideReader ? '100%' : `${readerWidth}ch` }}>
+      <article className={`card reader reader-font-${readerFont} ${isWideReader ? 'reader-spread' : 'reader-single'}`} style={{ fontSize: `${readerFontSize}px`, maxWidth: isWideReader ? '100%' : `${readerWidth}ch` }}>
         <div className='tabs'><button className={tab === 'article' ? 'active' : ''} onClick={() => setTab('article')}>Article</button><button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>Transcript</button></div>
+        <div className='reader-pagination'>
+          <button type='button' onClick={() => setCurrentPage((p) => Math.max(0, p - 1))} disabled={currentPage <= 0}>← Previous</button>
+          <span className='muted'>Page {Math.min(currentPage + 1, pages.length)} of {pages.length}</span>
+          <button type='button' onClick={() => setCurrentPage((p) => Math.min(pages.length - 1, p + 1))} disabled={currentPage >= pages.length - 1}>Next →</button>
+        </div>
         <div ref={articleRef} className='reader-scroll'>
-          {chunks.map((chunk, index) => <pre key={index}>{chunk}</pre>)}
+          <ReactMarkdown>{pages[currentPage] || ''}</ReactMarkdown>
         </div>
       </article>
       <article className='card'><h3>Processing timeline</h3><ul className='stack'>{(timeline.data ?? []).map((t) => <li key={t.id}><strong>{t.to_status}</strong> <span className='muted'>{new Date(t.created_at).toLocaleString()}</span>{t.message ? <div className='muted'>{t.message}</div> : null}</li>)}</ul></article>
@@ -529,11 +546,11 @@ function Settings() {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const { notify } = useNotifications();
   const settingsTemplate = useMemo(() => ({
-    timezone: 'UTC', ui_theme_default: 'system',
+    timezone: 'UTC',
     source_default_discovery_mode: 'latest_n', source_default_max_videos: '10', source_default_rolling_window_hours: '72', source_default_skip_shorts: 'true', source_default_min_duration_seconds: '180', source_default_dedup_policy: 'source_video_id',
     transcript_languages: 'en', transcript_first: 'true', transcript_fallback_enabled: 'true', whisper_model_size: 'base', transcription_cpu_threads: '4', transcription_language_hint: '',
-    generation_provider: 'openai', generation_model: 'gpt-4.1-mini', generation_temperature: '0.2', generation_timeout_seconds: '60', generation_max_tokens: '30000', global_prompt_template: 'Convert the transcript into a polished article.\n\n{{transcript}}', openai_api_key: '', openai_base_url: 'https://api.openai.com/v1', lmstudio_base_url: 'http://localhost:1234/v1',
-    reader_default_theme: 'dark', reader_font_family: 'sans', reader_font_size: '17', reader_line_width: '72',
+    generation_provider: 'openai', generation_model: 'gpt-4.1-mini', generation_temperature: '0.2', generation_timeout_seconds: '300', generation_max_tokens: '30000', global_prompt_template: 'Convert the transcript into a polished article.\n\n{{transcript}}', openai_api_key: '', openai_base_url: 'https://api.openai.com/v1', lmstudio_base_url: 'http://localhost:1234/v1',
+    reader_font_family: 'sans', reader_font_size: '17', reader_line_width: '72',
     scheduler_enabled: 'true', scheduler_default_cadence_minutes: '10', scheduler_concurrency_cap: '2',
   }), []);
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
@@ -555,7 +572,6 @@ function Settings() {
       description: 'Core app and interface defaults.',
       fields: [
         { key: 'timezone', label: 'Timezone', type: 'text', description: 'Used for schedules, logs, and timestamps.' },
-        { key: 'ui_theme_default', label: 'UI theme', type: 'select', options: [{ label: 'System', value: 'system' }, { label: 'Dark', value: 'dark' }, { label: 'Light', value: 'light' }] },
       ],
     },
     {
@@ -590,7 +606,7 @@ function Settings() {
         { key: 'generation_model', label: 'Model', type: 'text' },
         { key: 'global_prompt_template', label: 'Prompt template', type: 'textarea', description: 'Used for transcript-to-article generation. Supports {{transcript}} placeholder.' },
         { key: 'generation_temperature', label: 'Temperature', type: 'range', min: 0, max: 2, step: 0.1 },
-        { key: 'generation_timeout_seconds', label: 'Timeout (seconds)', type: 'range', min: 5, max: 600, step: 5 },
+        { key: 'generation_timeout_seconds', label: 'Timeout (seconds)', type: 'range', min: 300, max: 3600, step: 30 },
         { key: 'generation_max_tokens', label: 'Max tokens', type: 'range', min: 100, max: 30000, step: 100 },
         { key: 'openai_base_url', label: 'OpenAI base URL', type: 'url' },
         { key: 'openai_api_key', label: 'OpenAI API key', type: 'password' },
@@ -601,7 +617,6 @@ function Settings() {
       title: 'Reader',
       description: 'Reading experience defaults for typography and layout.',
       fields: [
-        { key: 'reader_default_theme', label: 'Reader theme', type: 'select', options: [{ label: 'Dark', value: 'dark' }, { label: 'Light', value: 'light' }, { label: 'Sepia', value: 'sepia' }] },
         { key: 'reader_font_family', label: 'Font family', type: 'select', options: [{ label: 'Sans', value: 'sans' }, { label: 'Serif', value: 'serif' }] },
         { key: 'reader_font_size', label: 'Font size', type: 'range', min: 12, max: 30, step: 1 },
         { key: 'reader_line_width', label: 'Line width (ch)', type: 'range', min: 45, max: 110, step: 1 },
@@ -741,31 +756,14 @@ function Logs() {
 function Layout() {
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
-  const [themeMode, setThemeMode] = useState<'dark' | 'light' | 'system'>('system');
   const notify = (message: string, kind: Notification['kind'] = 'success') => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     setNotifications((prev) => [...prev, { id, message, kind }]);
     window.setTimeout(() => setNotifications((prev) => prev.filter((item) => item.id !== id)), 3500);
   };
   useEffect(() => {
-    const preferredTheme = (localStorage.getItem('ui-theme-mode') as 'dark' | 'light' | 'system' | null)
-      || (settings.data?.ui_theme_default as 'dark' | 'light' | 'system' | undefined)
-      || 'system';
-    setThemeMode(preferredTheme);
-  }, [settings.data?.ui_theme_default]);
-
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const applyTheme = () => {
-      const resolved = themeMode === 'system' ? (media.matches ? 'dark' : 'light') : themeMode;
-      document.documentElement.setAttribute('data-theme', resolved);
-    };
-    applyTheme();
-    media.addEventListener('change', applyTheme);
-    localStorage.setItem('ui-theme-mode', themeMode);
-    return () => media.removeEventListener('change', applyTheme);
-  }, [themeMode]);
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }, []);
 
   const links = [
     ['/', 'Home', '🏠'],
@@ -794,18 +792,7 @@ function Layout() {
               </NavLink>
             ))}
           </nav>
-          {!navCollapsed ? (
-            <div className='sidebar-footer'>
-              <label>
-                Theme
-                <select value={themeMode} onChange={(e) => setThemeMode(e.target.value as 'dark' | 'light' | 'system')}>
-                  <option value='system'>System</option>
-                  <option value='dark'>Dark</option>
-                  <option value='light'>Light</option>
-                </select>
-              </label>
-            </div>
-          ) : null}
+          {!navCollapsed ? <div className='sidebar-footer muted'>Monochrome UI locked</div> : null}
         </div>
         </aside>
         <main>
