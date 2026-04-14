@@ -122,6 +122,10 @@ class Article(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     video_item_id: Mapped[int] = mapped_column(ForeignKey("video_items.id"), unique=True)
     title: Mapped[str] = mapped_column(String(500), default="")
+    ai_title: Mapped[str] = mapped_column(String(500), default="")
+    ai_video_category: Mapped[str] = mapped_column(String(120), default="")
+    ai_quality_score: Mapped[int] = mapped_column(Integer, default=0)
+    ai_quality_report: Mapped[str] = mapped_column(Text, default="")
     latest_version: Mapped[int] = mapped_column(Integer, default=1)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
 

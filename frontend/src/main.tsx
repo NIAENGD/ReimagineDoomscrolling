@@ -40,6 +40,7 @@ type Collection = { id: number; name: string };
 type LibraryItem = {
   article_id: number;
   title: string;
+  original_title?: string;
   version: number;
   body_preview: string;
   video_item_id: number;
@@ -50,6 +51,9 @@ type LibraryItem = {
   source_id: number;
   thumbnail_url: string;
   transcript_source: string;
+  video_category?: string;
+  quality_score?: number;
+  quality_report?: string;
   is_read: boolean;
   collections: Collection[];
   reading_progress: { position: number; total: number };
@@ -344,6 +348,11 @@ function Library() {
           <p className='muted'>
             {item.source_title} · v{item.version} · {item.published_at ? new Date(item.published_at).toLocaleDateString() : 'Unknown publish date'} · <span className='badge'>{item.transcript_source || 'unknown transcript'}</span>
           </p>
+          {item.original_title && item.original_title !== item.title ? <p className='muted'><strong>Original:</strong> {item.original_title}</p> : null}
+          <p className='row meta-row'>
+            <span className='badge'>Category: {item.video_category || 'Unrated'}</span>
+            <span className='badge'>Score: {item.quality_score ?? 0}</span>
+          </p>
           <p>{item.body_preview || 'No preview available.'}</p>
           <div className='row'>
             <Link to={`/reader/${item.article_id}`}>Open reader</Link>
@@ -478,6 +487,19 @@ function Reader() {
       <article className='card'>
         <h2>{detail.data?.title ?? 'Loading...'}</h2>
         <p className='muted'>{detail.data?.source_title} · {detail.data?.source_url}</p>
+        {detail.data?.original_title && detail.data?.original_title !== detail.data?.title ? (
+          <p className='muted'><strong>Original YouTube title:</strong> {detail.data.original_title}</p>
+        ) : null}
+        <p className='row meta-row'>
+          <span className='badge'>Category: {detail.data?.video_category || 'Unrated'}</span>
+          <span className='badge'>Score: {detail.data?.quality_score ?? 0}</span>
+        </p>
+        {detail.data?.quality_report ? (
+          <details>
+            <summary>AI quality report</summary>
+            <pre>{detail.data.quality_report}</pre>
+          </details>
+        ) : null}
         <div className='row'>
           <label>Version <select value={version?.version ?? ''} onChange={(e) => setSelectedVersion(Number(e.target.value))}>{(detail.data?.versions ?? []).map((v: any) => <option key={v.version} value={v.version}>v{v.version}</option>)}</select></label>
           <button onClick={() => regenerate.mutate()}>Regenerate</button>
@@ -558,6 +580,9 @@ function Settings() {
     source_default_discovery_mode: 'latest_n', source_default_max_videos: '10', source_default_rolling_window_hours: '72', source_default_skip_shorts: 'true', source_default_min_duration_seconds: '180', source_default_dedup_policy: 'source_video_id',
     transcript_languages: 'en', transcript_first: 'true', transcript_fallback_enabled: 'true', whisper_model_size: 'base', transcription_cpu_threads: '4', transcription_language_hint: '',
     generation_provider: 'openai', generation_model: 'gpt-4.1-mini', generation_temperature: '0.2', generation_timeout_seconds: '300', generation_max_tokens: '30000', global_prompt_template: 'Convert the transcript into a polished article.\n\n{{transcript}}', openai_api_key: '', openai_base_url: 'https://api.openai.com/v1', lmstudio_base_url: 'http://localhost:1234/v1',
+    title_prompt_template: 'Rewrite the video title into a descriptive, non-clickbait title that matches the transcript.',
+    score_prompt_template: 'Evaluate this video transcript with strict scoring and concise rationale.',
+    title_identifier_a: 'd}', title_identifier_b: '[/', title_identifier_c: '%x', title_identifier_d: '^#',
     reader_font_family: 'sans', reader_font_size: '17', reader_line_width: '72',
     scheduler_enabled: 'true', scheduler_default_cadence_minutes: '10', scheduler_concurrency_cap: '2',
   }), []);
@@ -613,6 +638,12 @@ function Settings() {
         { key: 'generation_provider', label: 'Provider', type: 'select', options: [{ label: 'No AI (raw transcript)', value: 'raw' }, { label: 'OpenAI', value: 'openai' }, { label: 'LM Studio', value: 'lmstudio' }] },
         { key: 'generation_model', label: 'Model', type: 'text' },
         { key: 'global_prompt_template', label: 'Prompt template', type: 'textarea', description: 'Used for transcript-to-article generation. Supports {{transcript}} placeholder.' },
+        { key: 'title_prompt_template', label: 'Title rewrite prompt', type: 'textarea', description: 'Dedicated prompt for clickbait-to-descriptive title rewriting.' },
+        { key: 'score_prompt_template', label: 'Score prompt', type: 'textarea', description: 'Dedicated prompt for category + strict scoring output.' },
+        { key: 'title_identifier_a', label: 'Title marker A', type: 'text' },
+        { key: 'title_identifier_b', label: 'Title marker B', type: 'text' },
+        { key: 'title_identifier_c', label: 'Title marker C', type: 'text' },
+        { key: 'title_identifier_d', label: 'Title marker D', type: 'text' },
         { key: 'generation_temperature', label: 'Temperature', type: 'range', min: 0, max: 2, step: 0.1 },
         { key: 'generation_timeout_seconds', label: 'Timeout (seconds)', type: 'range', min: 300, max: 3600, step: 30 },
         { key: 'generation_max_tokens', label: 'Max tokens', type: 'range', min: 100, max: 30000, step: 100 },
@@ -648,7 +679,7 @@ function Settings() {
       <article className='card settings-toolbar'>
         <div>
           <h2>System settings</h2>
-          <p className='muted'>Organized by area with proper controls for each option.</p>
+          <p className='muted'>Control panel layout with grouped sections, field labels, and saved-value previews.</p>
         </div>
         <button onClick={() => {
           const changes = Object.fromEntries(
@@ -662,9 +693,15 @@ function Settings() {
         }}
         >Save settings</button>
       </article>
-      <div className='settings-grid'>
+      <article className='card settings-section-index'>
+        <p className='muted'>Sections</p>
+        <div className='row'>
+          {groups.map((group) => <a key={group.title} href={`#settings-${group.title.replaceAll(' ', '-').toLowerCase()}`}>{group.title}</a>)}
+        </div>
+      </article>
+      <div className='settings-grid settings-grid-wide'>
         {groups.map((group) => (
-          <article className='card settings-group' key={group.title}>
+          <article className='card settings-group' key={group.title} id={`settings-${group.title.replaceAll(' ', '-').toLowerCase()}`}>
             <header>
               <h3>{group.title}</h3>
               <p className='muted'>{group.description}</p>
