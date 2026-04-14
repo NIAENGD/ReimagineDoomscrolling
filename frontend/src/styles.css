@@ -206,7 +206,6 @@ th { color: #fff; font-weight: 600; }
 .reader .tabs { display: flex; gap: .5rem; margin-bottom: .7rem; }
 .reader .tabs button { box-shadow: none; }
 .reader .tabs button.active { background: #fff; color: #000; }
-.reader-pagination { display: flex; gap: .7rem; align-items: center; margin-bottom: .7rem; }
 .reader .reader-scroll {
   overflow: visible;
   padding: .5rem .2rem .2rem;

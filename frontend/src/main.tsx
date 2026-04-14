@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import {
   BrowserRouter,
@@ -406,11 +406,9 @@ function Library() {
 function Reader() {
   const { id } = useParams();
   const queryClient = useQueryClient();
-  const articleRef = useRef<HTMLDivElement | null>(null);
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [tab, setTab] = useState<'article' | 'transcript'>('article');
   const [isWideReader, setIsWideReader] = useState(false);
-  const [currentPage, setCurrentPage] = useState(0);
   const { notify } = useNotifications();
 
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
@@ -453,34 +451,11 @@ function Reader() {
   const readerFontSize = Number(settings.data?.reader_font_size || 17);
   const readerWidth = Number(settings.data?.reader_line_width || 72);
   const activeContent = tab === 'article' ? (body || 'No content available.') : (transcript.data?.text || 'Transcript unavailable.');
-  const pages = useMemo(() => {
-    const paragraphs = activeContent.split(/\n{2,}/).filter(Boolean);
-    if (!paragraphs.length) return ['No content available.'];
-    const approxCharsPerLine = Math.max(42, Math.floor((isWideReader ? 108 : readerWidth) * 0.9));
-    const approxLines = Math.max(12, Math.floor((window.innerHeight * 0.62) / Math.max(14, readerFontSize * 1.6)));
-    const pageLimit = approxCharsPerLine * approxLines * (isWideReader ? 2 : 1);
-    const paged: string[] = [];
-    let current = '';
-    paragraphs.forEach((paragraph) => {
-      if ((current + paragraph).length > pageLimit && current.trim()) {
-        paged.push(current.trim());
-        current = paragraph;
-      } else {
-        current += `${current ? '\n\n' : ''}${paragraph}`;
-      }
-    });
-    if (current.trim()) paged.push(current.trim());
-    return paged.length ? paged : ['No content available.'];
-  }, [activeContent, isWideReader, readerWidth, readerFontSize]);
 
   useEffect(() => {
-    setCurrentPage(0);
-  }, [tab, version?.version, detail.data?.id, isWideReader, readerWidth, readerFontSize]);
-
-  useEffect(() => {
-    if (!id || !pages.length) return;
-    saveProgress.mutate({ position: currentPage + 1, total: pages.length });
-  }, [currentPage, id, pages.length, saveProgress]);
+    if (!id || !activeContent.trim()) return;
+    saveProgress.mutate({ position: 1, total: 1 });
+  }, [activeContent, id, saveProgress, tab, version?.version]);
 
   return (
     <Page title='Reader'>
@@ -513,13 +488,8 @@ function Reader() {
 
       <article className={`card reader reader-font-${readerFont} ${isWideReader ? 'reader-spread' : 'reader-single'}`} style={{ fontSize: `${readerFontSize}px`, maxWidth: isWideReader ? '100%' : `${readerWidth}ch` }}>
         <div className='tabs'><button className={tab === 'article' ? 'active' : ''} onClick={() => setTab('article')}>Article</button><button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>Transcript</button></div>
-        <div className='reader-pagination'>
-          <button type='button' onClick={() => setCurrentPage((p) => Math.max(0, p - 1))} disabled={currentPage <= 0}>← Previous</button>
-          <span className='muted'>Page {Math.min(currentPage + 1, pages.length)} of {pages.length}</span>
-          <button type='button' onClick={() => setCurrentPage((p) => Math.min(pages.length - 1, p + 1))} disabled={currentPage >= pages.length - 1}>Next →</button>
-        </div>
-        <div ref={articleRef} className='reader-scroll'>
-          <ReactMarkdown>{pages[currentPage] || ''}</ReactMarkdown>
+        <div className='reader-scroll'>
+          <ReactMarkdown>{activeContent}</ReactMarkdown>
         </div>
       </article>
       <article className='card'><h3>Processing timeline</h3><ul className='stack'>{(timeline.data ?? []).map((t) => <li key={t.id}><strong>{t.to_status}</strong> <span className='muted'>{new Date(t.created_at).toLocaleString()}</span>{t.message ? <div className='muted'>{t.message}</div> : null}</li>)}</ul></article>
