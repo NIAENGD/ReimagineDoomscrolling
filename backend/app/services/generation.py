@@ -46,7 +46,15 @@ def _chat_completion(base_url: str, api_key: str, model: str, prompt: str, tempe
         "model": model,
         "temperature": temperature,
         "messages": [
-            {"role": "system", "content": f"You convert transcripts into polished reading articles. {_mode_instruction(prompt)}"},
+            {
+                "role": "system",
+                "content": (
+                    "You convert transcripts into polished reading articles. "
+                    "Return only the final article body. Do not include reasoning, chain-of-thought, thinking process, "
+                    "analysis notes, scratchpad text, or XML tags like <think>. "
+                    f"{_mode_instruction(prompt)}"
+                ),
+            },
             {"role": "user", "content": prompt},
         ],
         "max_tokens": max_tokens,
@@ -57,7 +65,14 @@ def _chat_completion(base_url: str, api_key: str, model: str, prompt: str, tempe
         response.raise_for_status()
 
     body = response.json()
-    return body["choices"][0]["message"]["content"].strip()
+    raw = body["choices"][0]["message"]["content"].strip()
+    return _strip_reasoning_artifacts(raw)
+
+
+def _strip_reasoning_artifacts(text: str) -> str:
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL)
+    cleaned = re.sub(r"```(?:thinking|reasoning)[\s\S]*?```", "", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
 
 
 def _clean_raw_transcript(transcript: str) -> str:

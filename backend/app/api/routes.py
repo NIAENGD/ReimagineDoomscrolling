@@ -58,11 +58,10 @@ DEFAULT_APP_SETTINGS = {
     "retry_default_backoff_multiplier": "2",
     "generation_provider": "openai",
     "generation_model": "gpt-4.1-mini",
-    "generation_mode": "detailed",
     "generation_temperature": "0.2",
     "generation_timeout_seconds": "60",
-    "generation_max_tokens": "1200",
-    "global_prompt_template": "Convert to {{mode}} article\n{{transcript}}",
+    "generation_max_tokens": "30000",
+    "global_prompt_template": "Convert the transcript into a polished article.\n\n{{transcript}}",
     "transcript_languages": "en",
     "retain_failed_audio": "false",
     "delete_audio_after_success": "true",
@@ -133,7 +132,6 @@ def settings_schema():
         "generation": [
             "generation_provider",
             "generation_model",
-            "generation_mode",
             "generation_temperature",
             "generation_timeout_seconds",
             "generation_max_tokens",
@@ -404,8 +402,7 @@ def generation_prompt_preview(payload: dict, db: Session = Depends(get_db)):
     template_setting = db.execute(select(AppSetting).where(AppSetting.key == "global_prompt_template")).scalar_one_or_none()
     template = payload.get("template") or (template_setting.value if template_setting else DEFAULT_APP_SETTINGS["global_prompt_template"])
     transcript = payload.get("transcript", "")
-    mode = payload.get("mode") or "detailed"
-    return {"prompt": render_prompt(template, transcript, mode)}
+    return {"prompt": render_prompt(template, transcript, "")}
 
 
 @router.post('/generation/test-prompt')
@@ -413,9 +410,8 @@ def generation_test_prompt(payload: dict, db: Session = Depends(get_db)):
     transcript = payload.get("transcript", "")
     if not transcript.strip():
         raise HTTPException(400, "transcript is required")
-    mode = payload.get("mode") or "detailed"
     template = payload.get("template") or DEFAULT_APP_SETTINGS["global_prompt_template"]
-    prompt = render_prompt(template, transcript, mode)
+    prompt = render_prompt(template, transcript, "")
     rows = db.execute(select(AppSetting)).scalars().all()
     settings_map = {r.key: r.value for r in rows}
     body = generate_article(
@@ -426,7 +422,7 @@ def generation_test_prompt(payload: dict, db: Session = Depends(get_db)):
             model=settings_map.get("generation_model", "gpt-4.1-mini"),
             temperature=float(settings_map.get("generation_temperature", "0.2")),
             timeout_seconds=float(settings_map.get("generation_timeout_seconds", "60")),
-            max_tokens=int(settings_map.get("generation_max_tokens", "1200")),
+            max_tokens=int(settings_map.get("generation_max_tokens", "30000")),
             openai_api_key=settings_map.get("openai_api_key", ""),
             openai_base_url=settings_map.get("openai_base_url", ""),
             lmstudio_base_url=settings_map.get("lmstudio_base_url", ""),
