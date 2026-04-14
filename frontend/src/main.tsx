@@ -17,6 +17,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import type { AxiosError } from 'axios';
 import ReactMarkdown from 'react-markdown';
 import { api } from './lib/api';
 import './styles.css';
@@ -99,6 +100,13 @@ const NotificationContext = React.createContext<{ notify: (message: string, kind
 
 function useNotifications() {
   return React.useContext(NotificationContext);
+}
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  const detail = (error as AxiosError<{ detail?: unknown }>)?.response?.data?.detail;
+  if (typeof detail !== 'string') return fallback;
+  const cleaned = detail.replace(/\\n/g, '\n').trim();
+  return cleaned || fallback;
 }
 
 function Page({ title, children }: { title: string; children: React.ReactNode }) {
@@ -186,7 +194,7 @@ function Sources() {
   const deleteSource = useMutation({
     mutationFn: async (id: number) => api.delete(`/sources/${id}`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['sources'] }); notify('Source removed.'); },
-    onError: () => notify('Could not remove source.', 'error'),
+    onError: (error) => notify(getApiErrorMessage(error, 'Could not remove source.'), 'error'),
   });
 
   return (
