@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.models.entities import (
     AppSetting,
     Article,
@@ -44,6 +44,15 @@ from app.services.youtube import normalize_source_url, resolve_source_identity
 from app.workers.scheduler import scheduler_status
 
 router = APIRouter()
+
+
+def _refresh_source_in_background(source_id: int):
+    db = SessionLocal()
+    try:
+        refresh_source(db, source_id)
+    finally:
+        db.close()
+
 DEFAULT_APP_SETTINGS = {
     "ffmpeg_path": "",
     "yt_dlp_path": "",
@@ -182,7 +191,7 @@ def list_sources(db: Session = Depends(get_db)):
 
 
 @router.post('/sources', response_model=SourceOut)
-def create_source(body: SourceCreate, db: Session = Depends(get_db)):
+def create_source(body: SourceCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     try:
         normalized = normalize_source_url(body.url)
     except ValueError as e:
@@ -244,7 +253,7 @@ def create_source(body: SourceCreate, db: Session = Depends(get_db)):
     db.add(src)
     db.commit()
     db.refresh(src)
-    refresh_source(db, src.id)
+    background_tasks.add_task(_refresh_source_in_background, src.id)
     return src
 
 
