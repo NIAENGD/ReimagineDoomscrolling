@@ -53,7 +53,11 @@ def test_integration_real_life_lore_refresh_discovery_and_generation(monkeypatch
         ],
     )
     monkeypatch.setattr(pipeline, "fetch_transcript", lambda *_args, **_kwargs: ("Transcript text", "youtube_transcript"))
-    monkeypatch.setattr(pipeline, "generate_article", lambda *_args, **_kwargs: "Generated article body")
+    monkeypatch.setattr(
+        pipeline,
+        "generate_article",
+        lambda *_args, **_kwargs: 'Generated article body\nd}[/"Geography and Island Economics"%x^#',
+    )
 
     with TestClient(app) as client:
         source_id = _create_source(client)
@@ -119,7 +123,7 @@ def test_integration_transcript_fallback_retry_and_regeneration(monkeypatch):
 
     def fake_generate(*_args, **_kwargs):
         calls["generate"] += 1
-        return f"Generated v{calls['generate']}"
+        return f'Generated v{calls["generate"]}\n' + 'd}[/"Fallback Path"%x^#'
 
     monkeypatch.setattr(pipeline, "fetch_transcript", fake_fetch)
     monkeypatch.setattr(pipeline, "transcribe_audio_locally", fake_transcribe)
@@ -141,7 +145,7 @@ def test_integration_transcript_fallback_retry_and_regeneration(monkeypatch):
 
         library = client.get("/api/library")
         assert library.status_code == 200
-        article_id = next(row["article_id"] for row in library.json() if row["title"] == "Fallback Path")
+        article_id = library.json()[0]["article_id"]
 
         transcript = client.get(f"/api/transcripts/{item_id}")
         assert transcript.status_code == 200

@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services.generation import ProviderConfig, generate_article, render_prompt
+from app.services.generation import ProviderConfig, extract_tagged_title, generate_article, render_prompt
 from app.services.transcript import should_fallback_to_transcription, transcribe_audio_locally
 from app.services.youtube import (
     _candidate_feed_urls,
@@ -69,6 +69,18 @@ def test_prompt_and_generation_provider_validation():
     prompt = render_prompt('Mode={{mode}}\n{{transcript}}', 'abc', 'study')
     with pytest.raises(ValueError):
         generate_article('abc', prompt, ProviderConfig(provider='unsupported-provider', model='x'))
+
+
+def test_extract_tagged_title_requires_exactly_one_marker():
+    body, title, ok = extract_tagged_title('Article body\nd}[/"A Brief Intro to Humanity"%x^#')
+    assert ok is True
+    assert title == "A Brief Intro to Humanity"
+    assert body == "Article body"
+
+    body_bad, title_bad, ok_bad = extract_tagged_title('No marker here')
+    assert ok_bad is False
+    assert title_bad is None
+    assert body_bad == "No marker here"
 
 
 def test_handle_feed_falls_back_to_channel_id_when_user_feed_is_empty(monkeypatch):

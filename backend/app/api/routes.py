@@ -70,7 +70,7 @@ DEFAULT_APP_SETTINGS = {
     "generation_temperature": "0.2",
     "generation_timeout_seconds": "300",
     "generation_max_tokens": "30000",
-    "global_prompt_template": "Convert the transcript into a polished article.\n\n{{transcript}}",
+    "global_prompt_template": "Rewrite the transcript into a clean article with clear sections and factual wording.\nAvoid clickbait language.\n\n{{transcript}}",
     "transcript_languages": "en",
     "retain_failed_audio": "false",
     "delete_audio_after_success": "true",

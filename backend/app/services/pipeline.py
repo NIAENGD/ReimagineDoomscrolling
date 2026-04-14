@@ -16,7 +16,7 @@ from app.models.entities import (
     Transcript,
     VideoItem,
 )
-from app.services.generation import ProviderConfig, generate_article, render_prompt
+from app.services.generation import ProviderConfig, extract_tagged_title, generate_article, render_prompt
 from app.services.ops import log_event
 from app.services.transcript import fetch_transcript, should_fallback_to_transcription, transcribe_audio_locally
 from app.services.youtube import discover_videos, evaluate_video_policy, normalize_source_url, resolve_source_identity
@@ -254,30 +254,55 @@ def process_video_item(db, item_id: int):
         _set_item_status(db, item, ItemStatus.generation_started)
         provider_name = _get_setting(db, "generation_provider", "openai")
         model_name = _get_setting(db, "generation_model", "gpt-4.1-mini")
-        global_template = _get_setting(db, "global_prompt_template", "Convert the transcript into a polished article.\n\n{{transcript}}")
+        global_template = _get_setting(
+            db,
+            "global_prompt_template",
+            "Rewrite the transcript into a clean article with clear sections and factual wording.\nAvoid clickbait language.\n\n{{transcript}}",
+        )
         timeout_seconds = float(_get_setting(db, "generation_timeout_seconds", "300"))
         temperature = float(_get_setting(db, "generation_temperature", "0.2"))
         max_tokens = int(_get_setting(db, "generation_max_tokens", "30000"))
         prompt_template = source.prompt_override if source and source.prompt_override else global_template
         prompt = render_prompt(prompt_template, text, "")
-        body = generate_article(
-            text,
-            prompt,
-            ProviderConfig(
-                provider=provider_name,
-                model=model_name,
-                temperature=temperature,
-                timeout_seconds=timeout_seconds,
-                max_tokens=max_tokens,
-                openai_api_key=_get_setting(db, "openai_api_key", ""),
-                openai_base_url=_get_setting(db, "openai_base_url", ""),
-                lmstudio_base_url=_get_setting(db, "lmstudio_base_url", ""),
-            ),
+        provider_cfg = ProviderConfig(
+            provider=provider_name,
+            model=model_name,
+            temperature=temperature,
+            timeout_seconds=timeout_seconds,
+            max_tokens=max_tokens,
+            openai_api_key=_get_setting(db, "openai_api_key", ""),
+            openai_base_url=_get_setting(db, "openai_base_url", ""),
+            lmstudio_base_url=_get_setting(db, "lmstudio_base_url", ""),
         )
+        tagged_prompt = (
+            f"{prompt}\n\n"
+            "After the article, output exactly one tagged title in this format: "
+            'd}[/"<descriptive title>"%x^# . '
+            "Use a descriptive non-clickbait title. The tag must appear exactly once."
+        )
+
+        body = ""
+        rewritten_title = ""
+        if provider_name.lower() in {"none", "raw", "raw_transcript"}:
+            body = generate_article(text, prompt, provider_cfg)
+            rewritten_title = item.title
+        else:
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                candidate = generate_article(text, tagged_prompt, provider_cfg)
+                parsed_body, parsed_title, ok = extract_tagged_title(candidate)
+                if ok and parsed_title:
+                    body = parsed_body
+                    rewritten_title = parsed_title
+                    break
+                if attempt == max_attempts - 1:
+                    raise ValueError("Model output missing a single valid tagged title token")
+            if not body:
+                raise ValueError("Could not generate article body")
 
         article = db.execute(select(Article).where(Article.video_item_id == item.id)).scalar_one_or_none()
         if not article:
-            article = Article(video_item_id=item.id, title=item.title, latest_version=1)
+            article = Article(video_item_id=item.id, title=rewritten_title or item.title, latest_version=1)
             db.add(article)
             db.flush()
             db.add(ReadingProgress(article_id=article.id, position=0, total=0))
@@ -285,6 +310,10 @@ def process_video_item(db, item_id: int):
         else:
             version_num = article.latest_version + 1
             article.latest_version = version_num
+            article.title = rewritten_title or article.title or item.title
+
+        if rewritten_title:
+            item.title = rewritten_title
 
         db.add(ArticleVersion(article_id=article.id, version=version_num, mode="default", prompt_snapshot=prompt, body=body))
         _set_item_status(db, item, ItemStatus.generation_completed)

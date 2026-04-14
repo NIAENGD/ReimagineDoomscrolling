@@ -7,6 +7,10 @@ import re
 
 from app.core.config import settings
 
+TITLE_PREFIX = 'd}[/"'
+TITLE_SUFFIX = '"%x^#'
+TITLE_PATTERN = re.compile(r'd}\[/"([^"\n]{3,220})"%x\^#')
+
 
 @dataclass
 class ProviderConfig:
@@ -86,6 +90,18 @@ def _clean_raw_transcript(transcript: str) -> str:
         if line:
             lines.append(line)
     return "\n".join(lines)
+
+
+def extract_tagged_title(text: str) -> tuple[str, str | None, bool]:
+    matches = TITLE_PATTERN.findall(text)
+    if len(matches) != 1:
+        return text.strip(), None, False
+
+    title = matches[0].strip()
+    body = TITLE_PATTERN.sub("", text).strip()
+    if not title or not body:
+        return text.strip(), None, False
+    return body, title, True
 
 
 def generate_article(transcript: str, prompt: str, cfg: ProviderConfig) -> str:

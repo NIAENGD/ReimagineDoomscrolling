@@ -43,7 +43,7 @@ def test_source_refresh_deduplicates_and_records_status_timeline(monkeypatch):
     monkeypatch.setattr(pipeline, 'discover_videos', fake_discover)
     monkeypatch.setattr(pipeline, 'resolve_source_identity', lambda _url: {'normalized_url': 'https://www.youtube.com/channel/xyz', 'canonical_url': 'https://www.youtube.com/channel/xyz', 'channel_id': 'xyz', 'title': 'XYZ'})
     monkeypatch.setattr(pipeline, 'fetch_transcript', lambda *_args, **_kwargs: ('hello world', 'youtube_transcript'))
-    monkeypatch.setattr(pipeline, 'generate_article', lambda *_args, **_kwargs: 'Generated body')
+    monkeypatch.setattr(pipeline, 'generate_article', lambda *_args, **_kwargs: 'Generated body\nd}[/"One"%x^#')
 
     with TestClient(app) as client:
         s = client.post('/api/sources', json={'url': 'https://youtube.com/channel/xyz', 'title': 'XYZ', 'max_videos': 2})

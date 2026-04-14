@@ -557,7 +557,7 @@ function Settings() {
     timezone: 'UTC',
     source_default_discovery_mode: 'latest_n', source_default_max_videos: '10', source_default_rolling_window_hours: '72', source_default_skip_shorts: 'true', source_default_min_duration_seconds: '180', source_default_dedup_policy: 'source_video_id',
     transcript_languages: 'en', transcript_first: 'true', transcript_fallback_enabled: 'true', whisper_model_size: 'base', transcription_cpu_threads: '4', transcription_language_hint: '',
-    generation_provider: 'openai', generation_model: 'gpt-4.1-mini', generation_temperature: '0.2', generation_timeout_seconds: '300', generation_max_tokens: '30000', global_prompt_template: 'Convert the transcript into a polished article.\n\n{{transcript}}', openai_api_key: '', openai_base_url: 'https://api.openai.com/v1', lmstudio_base_url: 'http://localhost:1234/v1',
+    generation_provider: 'openai', generation_model: 'gpt-4.1-mini', generation_temperature: '0.2', generation_timeout_seconds: '300', generation_max_tokens: '30000', global_prompt_template: 'Rewrite the transcript into a clean article with clear sections and factual wording.\nAvoid clickbait language.\n\n{{transcript}}', openai_api_key: '', openai_base_url: 'https://api.openai.com/v1', lmstudio_base_url: 'http://localhost:1234/v1',
     reader_font_family: 'sans', reader_font_size: '17', reader_line_width: '72',
     scheduler_enabled: 'true', scheduler_default_cadence_minutes: '10', scheduler_concurrency_cap: '2',
   }), []);
@@ -608,11 +608,11 @@ function Settings() {
     },
     {
       title: 'Generation',
-      description: 'Model provider and inference limits.',
+      description: 'Model provider, article output, and AI title rewrite behavior.',
       fields: [
         { key: 'generation_provider', label: 'Provider', type: 'select', options: [{ label: 'No AI (raw transcript)', value: 'raw' }, { label: 'OpenAI', value: 'openai' }, { label: 'LM Studio', value: 'lmstudio' }] },
         { key: 'generation_model', label: 'Model', type: 'text' },
-        { key: 'global_prompt_template', label: 'Prompt template', type: 'textarea', description: 'Used for transcript-to-article generation. Supports {{transcript}} placeholder.' },
+        { key: 'global_prompt_template', label: 'Prompt template', type: 'textarea', description: 'Used for transcript-to-article generation. Supports {{transcript}} placeholder. The app appends a tagged descriptive-title instruction automatically.' },
         { key: 'generation_temperature', label: 'Temperature', type: 'range', min: 0, max: 2, step: 0.1 },
         { key: 'generation_timeout_seconds', label: 'Timeout (seconds)', type: 'range', min: 300, max: 3600, step: 30 },
         { key: 'generation_max_tokens', label: 'Max tokens', type: 'range', min: 100, max: 30000, step: 100 },
@@ -648,9 +648,22 @@ function Settings() {
       <article className='card settings-toolbar'>
         <div>
           <h2>System settings</h2>
-          <p className='muted'>Organized by area with proper controls for each option.</p>
+          <p className='muted'>Structured like a control panel with grouped sections and persistent save actions.</p>
         </div>
-        <button onClick={() => {
+      </article>
+      <section className='settings-shell'>
+        <aside className='card settings-nav'>
+          <h3>Sections</h3>
+          <div className='stack'>
+            {groups.map((group) => (
+              <a key={group.title} href={`#settings-${group.title.replace(/\s+/g, '-').toLowerCase()}`}>{group.title}</a>
+            ))}
+          </div>
+        </aside>
+        <div className='settings-panels'>
+          <article className='card settings-actions'>
+            <p className='muted'>Unsaved fields stay in this page until you save.</p>
+            <button onClick={() => {
           const changes = Object.fromEntries(
             Object.entries(draft).filter(([_, value]) => value !== '***redacted***'),
           );
@@ -660,11 +673,11 @@ function Settings() {
           }
           save.mutate(changes);
         }}
-        >Save settings</button>
-      </article>
-      <div className='settings-grid'>
-        {groups.map((group) => (
-          <article className='card settings-group' key={group.title}>
+            >Save settings</button>
+          </article>
+          <div className='settings-grid'>
+            {groups.map((group) => (
+              <article className='card settings-group' key={group.title} id={`settings-${group.title.replace(/\s+/g, '-').toLowerCase()}`}>
             <header>
               <h3>{group.title}</h3>
               <p className='muted'>{group.description}</p>
@@ -710,9 +723,11 @@ function Settings() {
                 );
               })}
             </div>
-          </article>
-        ))}
-      </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
     </Page>
   );
 }
