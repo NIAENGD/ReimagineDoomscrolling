@@ -89,3 +89,30 @@ def test_create_source_triggers_initial_refresh(monkeypatch):
         assert created.status_code == 200
         source_id = created.json()["id"]
         assert calls == [source_id]
+
+
+def test_delete_source_removes_dependent_refresh_runs_and_job_items():
+    from app.db.session import SessionLocal
+    from app.models.entities import Job, JobItem, RefreshRun, Source
+
+    with TestClient(app) as client:
+        created = client.post("/api/sources", json={"url": "https://youtube.com/channel/delete-me", "title": "Delete me"})
+        assert created.status_code == 200
+        source_id = created.json()["id"]
+
+        db = SessionLocal()
+        try:
+            src = db.get(Source, source_id)
+            assert src is not None
+            job = Job(type="refresh_source", status="queued", source_id=source_id)
+            db.add(job)
+            db.flush()
+            db.add(JobItem(job_id=job.id, status="queued"))
+            db.add(RefreshRun(source_id=source_id, status="done", summary="ok"))
+            db.commit()
+        finally:
+            db.close()
+
+        deleted = client.delete(f"/api/sources/{source_id}")
+        assert deleted.status_code == 200
+        assert deleted.json() == {"deleted": True}

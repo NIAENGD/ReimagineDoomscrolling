@@ -10,9 +10,12 @@ from app.models.entities import (
     ItemStatus,
     Collection,
     CollectionArticle,
+    ItemStatusTransition,
     Job,
+    JobItem,
     LogEvent,
     ReadingProgress,
+    RefreshRun,
     Source,
     SourceState,
     Transcript,
@@ -294,7 +297,16 @@ def delete_source(source_id: int, db: Session = Depends(get_db)):
     src = db.get(Source, source_id)
     if not src:
         raise HTTPException(404)
+    source_job_ids = [
+        row[0]
+        for row in db.execute(select(Job.id).where(Job.source_id == source_id)).all()
+    ]
     video_ids = [row[0] for row in db.execute(select(VideoItem.id).where(VideoItem.source_id == source_id)).all()]
+    video_job_ids = [
+        row[0]
+        for row in db.execute(select(Job.id).where(Job.video_item_id.in_(video_ids))).all()
+    ] if video_ids else []
+    job_ids = list({*source_job_ids, *video_job_ids})
     article_ids = [row[0] for row in db.execute(select(Article.id).where(Article.video_item_id.in_(video_ids))).all()] if video_ids else []
     if article_ids:
         db.query(CollectionArticle).filter(CollectionArticle.article_id.in_(article_ids)).delete(synchronize_session=False)
@@ -302,9 +314,13 @@ def delete_source(source_id: int, db: Session = Depends(get_db)):
         db.query(ArticleVersion).filter(ArticleVersion.article_id.in_(article_ids)).delete(synchronize_session=False)
         db.query(Article).filter(Article.id.in_(article_ids)).delete(synchronize_session=False)
     if video_ids:
+        db.query(ItemStatusTransition).filter(ItemStatusTransition.video_item_id.in_(video_ids)).delete(synchronize_session=False)
         db.query(Transcript).filter(Transcript.video_item_id.in_(video_ids)).delete(synchronize_session=False)
         db.query(Job).filter(Job.video_item_id.in_(video_ids)).delete(synchronize_session=False)
         db.query(VideoItem).filter(VideoItem.id.in_(video_ids)).delete(synchronize_session=False)
+    if job_ids:
+        db.query(JobItem).filter(JobItem.job_id.in_(job_ids)).delete(synchronize_session=False)
+    db.query(RefreshRun).filter(RefreshRun.source_id == source_id).delete(synchronize_session=False)
     db.query(Job).filter(Job.source_id == source_id).delete()
     db.delete(src)
     db.commit()
