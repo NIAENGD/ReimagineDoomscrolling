@@ -86,6 +86,20 @@ type SettingField = {
   step?: number;
 };
 
+type Notification = {
+  id: number;
+  kind: 'success' | 'error' | 'info';
+  message: string;
+};
+
+const NotificationContext = React.createContext<{ notify: (message: string, kind?: Notification['kind']) => void }>({
+  notify: () => undefined,
+});
+
+function useNotifications() {
+  return React.useContext(NotificationContext);
+}
+
 function Page({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className='page'>
@@ -154,17 +168,24 @@ function Home() {
 function Sources() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { notify } = useNotifications();
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const sources = useQuery({ queryKey: ['sources'], queryFn: async () => (await api.get('/sources')).data as Source[] });
   const createSource = useMutation({
     mutationFn: async () => api.post('/sources', { title, url }),
-    onSuccess: () => { setTitle(''); setUrl(''); queryClient.invalidateQueries({ queryKey: ['sources'] }); },
+    onSuccess: () => { setTitle(''); setUrl(''); queryClient.invalidateQueries({ queryKey: ['sources'] }); notify('Source added successfully.'); },
+    onError: () => notify('Could not add source.', 'error'),
   });
-  const updateSource = useMutation({ mutationFn: async ({ id, payload }: { id: number; payload: Partial<Source> }) => api.patch(`/sources/${id}`, payload), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sources'] }) });
+  const updateSource = useMutation({
+    mutationFn: async ({ id, payload }: { id: number; payload: Partial<Source> }) => api.patch(`/sources/${id}`, payload),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['sources'] }); notify('Source updated.'); },
+    onError: () => notify('Source update failed.', 'error'),
+  });
   const deleteSource = useMutation({
     mutationFn: async (id: number) => api.delete(`/sources/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sources'] }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['sources'] }); notify('Source removed.'); },
+    onError: () => notify('Could not remove source.', 'error'),
   });
 
   return (
@@ -208,6 +229,7 @@ function SourceDetail() {
   const { id } = useParams();
   const sourceId = Number(id);
   const source = useQuery({ queryKey: ['sources'], queryFn: async () => (await api.get('/sources')).data as Source[] });
+  const { notify } = useNotifications();
   const logs = useQuery({
     queryKey: ['logs', sourceId],
     queryFn: async () => (await api.get('/logs', { params: { source_id: sourceId } })).data as LogEntry[],
@@ -219,7 +241,9 @@ function SourceDetail() {
     onSuccess: () => {
       source.refetch();
       logs.refetch();
+      notify('Source refresh started.');
     },
+    onError: () => notify('Source refresh failed.', 'error'),
   });
   const src = (source.data ?? []).find((s) => String(s.id) === id);
   const activeLogs = (logs.data ?? []).filter((entry) => entry.context.includes(`source_id=${sourceId}`));
@@ -260,6 +284,7 @@ function SourceDetail() {
 function Library() {
   const [params, setParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const { notify } = useNotifications();
   const q = params.get('q') ?? '';
   const source = params.get('source') ?? '';
   const selectedChannel = params.get('channel') ?? 'all';
@@ -280,8 +305,16 @@ function Library() {
   );
   const visibleEntries = selectedChannel === 'all' ? entries : entries.filter((item) => item.source_title === selectedChannel);
 
-  const markRead = useMutation({ mutationFn: async ({ articleId, isRead }: { articleId: number; isRead: boolean }) => api.post(`/articles/${articleId}/read-state`, { is_read: isRead }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['library'] }) });
-  const addToCollection = useMutation({ mutationFn: async ({ articleId, collectionId }: { articleId: number; collectionId: number }) => api.post(`/collections/${collectionId}/articles/${articleId}`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['library'] }) });
+  const markRead = useMutation({
+    mutationFn: async ({ articleId, isRead }: { articleId: number; isRead: boolean }) => api.post(`/articles/${articleId}/read-state`, { is_read: isRead }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['library'] }); notify('Read state updated.'); },
+    onError: () => notify('Could not update read state.', 'error'),
+  });
+  const addToCollection = useMutation({
+    mutationFn: async ({ articleId, collectionId }: { articleId: number; collectionId: number }) => api.post(`/collections/${collectionId}/articles/${articleId}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['library'] }); notify('Added to collection.'); },
+    onError: () => notify('Could not add to collection.', 'error'),
+  });
 
   const set = (k: string, v: string) => { const next = Object.fromEntries(params.entries()); if (v) next[k] = v; else delete next[k]; setParams(next); };
 
@@ -359,14 +392,23 @@ function Reader() {
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [tab, setTab] = useState<'article' | 'transcript'>('article');
   const [isWideReader, setIsWideReader] = useState(false);
+  const { notify } = useNotifications();
 
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
   const detail = useQuery({ queryKey: ['article', id], queryFn: async () => (await api.get(`/articles/${id}`)).data, enabled: Boolean(id) });
   const transcript = useQuery({ queryKey: ['transcript', detail.data?.video_item_id], queryFn: async () => (await api.get(`/transcripts/${detail.data?.video_item_id}`)).data, enabled: Boolean(detail.data?.video_item_id) });
   const timeline = useQuery({ queryKey: ['item-timeline', detail.data?.video_item_id], queryFn: async () => (await api.get(`/items/${detail.data?.video_item_id}/timeline`)).data as ItemTransition[], enabled: Boolean(detail.data?.video_item_id) });
 
-  const regenerate = useMutation({ mutationFn: async () => api.post(`/articles/${id}/regenerate`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['article', id] }) });
-  const markRead = useMutation({ mutationFn: async (isRead: boolean) => api.post(`/articles/${id}/read-state`, { is_read: isRead }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['article', id] }) });
+  const regenerate = useMutation({
+    mutationFn: async () => api.post(`/articles/${id}/regenerate`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['article', id] }); notify('Regeneration started.'); },
+    onError: () => notify('Could not regenerate article.', 'error'),
+  });
+  const markRead = useMutation({
+    mutationFn: async (isRead: boolean) => api.post(`/articles/${id}/read-state`, { is_read: isRead }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['article', id] }); notify('Read state updated.'); },
+    onError: () => notify('Could not update read state.', 'error'),
+  });
   const saveProgress = useMutation({ mutationFn: async (payload: { position: number; total: number }) => api.post(`/articles/${id}/progress`, payload) });
 
   const version = useMemo(() => {
@@ -421,7 +463,7 @@ function Reader() {
           <button onClick={() => regenerate.mutate()}>Regenerate</button>
           <button onClick={() => { detail.refetch(); transcript.refetch(); timeline.refetch(); }}>Refresh data</button>
           <button onClick={() => markRead.mutate(!detail.data?.is_read)}>{detail.data?.is_read ? 'Mark unread' : 'Mark read'}</button>
-          <button onClick={() => navigator.clipboard.writeText(body)}>Copy</button>
+          <button onClick={() => navigator.clipboard.writeText(body).then(() => notify('Article copied to clipboard.')).catch(() => notify('Could not copy article.', 'error'))}>Copy</button>
           <span className='muted'>~{estMinutes} min read</span>
         </div>
         {!!headings.length && <details><summary>Headings</summary><ul>{headings.map((h, i) => <li key={i}>{h.replace(/^#{1,3}\s+/, '')}</li>)}</ul></details>}
@@ -442,14 +484,31 @@ function CollectionsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { notify } = useNotifications();
   const [name, setName] = useState('');
   const collections = useQuery({ queryKey: ['collections'], queryFn: async () => (await api.get('/collections')).data as Collection[] });
   const detail = useQuery({ queryKey: ['collection', id], queryFn: async () => (await api.get(`/collections/${id}`)).data, enabled: Boolean(id) });
 
-  const create = useMutation({ mutationFn: async () => api.post('/collections', { name }), onSuccess: () => { setName(''); queryClient.invalidateQueries({ queryKey: ['collections'] }); } });
-  const rename = useMutation({ mutationFn: async () => api.patch(`/collections/${id}`, { name }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['collection', id] }) });
-  const del = useMutation({ mutationFn: async () => api.delete(`/collections/${id}`), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['collections'] }); navigate('/collections'); } });
-  const remove = useMutation({ mutationFn: async (articleId: number) => api.delete(`/collections/${id}/articles/${articleId}`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['collection', id] }) });
+  const create = useMutation({
+    mutationFn: async () => api.post('/collections', { name }),
+    onSuccess: () => { setName(''); queryClient.invalidateQueries({ queryKey: ['collections'] }); notify('Collection created.'); },
+    onError: () => notify('Could not create collection.', 'error'),
+  });
+  const rename = useMutation({
+    mutationFn: async () => api.patch(`/collections/${id}`, { name }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['collection', id] }); notify('Collection renamed.'); },
+    onError: () => notify('Could not rename collection.', 'error'),
+  });
+  const del = useMutation({
+    mutationFn: async () => api.delete(`/collections/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['collections'] }); navigate('/collections'); notify('Collection deleted.'); },
+    onError: () => notify('Could not delete collection.', 'error'),
+  });
+  const remove = useMutation({
+    mutationFn: async (articleId: number) => api.delete(`/collections/${id}/articles/${articleId}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['collection', id] }); notify('Article removed from collection.'); },
+    onError: () => notify('Could not remove article.', 'error'),
+  });
 
   return (
     <Page title='Collections'>
@@ -468,6 +527,7 @@ function CollectionsPage() {
 function Settings() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const { notify } = useNotifications();
   const settingsTemplate = useMemo(() => ({
     timezone: 'UTC', ui_theme_default: 'system',
     source_default_discovery_mode: 'latest_n', source_default_max_videos: '10', source_default_rolling_window_hours: '72', source_default_skip_shorts: 'true', source_default_min_duration_seconds: '180', source_default_dedup_policy: 'source_video_id',
@@ -477,7 +537,15 @@ function Settings() {
     scheduler_enabled: 'true', scheduler_default_cadence_minutes: '10', scheduler_concurrency_cap: '2',
   }), []);
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
-  const save = useMutation({ mutationFn: async (payload: Record<string, string>) => api.put('/settings', payload), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }) });
+  const save = useMutation({
+    mutationFn: async (payload: Record<string, string>) => api.put('/settings', payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      setDraft({});
+      notify('Settings saved.');
+    },
+    onError: () => notify('Settings failed to save.', 'error'),
+  });
 
   const merged = { ...settingsTemplate, ...(settings.data ?? {}), ...draft };
 
@@ -559,7 +627,17 @@ function Settings() {
           <h2>System settings</h2>
           <p className='muted'>Organized by area with proper controls for each option.</p>
         </div>
-        <button onClick={() => save.mutate(merged)}>Save settings</button>
+        <button onClick={() => {
+          const changes = Object.fromEntries(
+            Object.entries(draft).filter(([_, value]) => value !== '***redacted***'),
+          );
+          if (!Object.keys(changes).length) {
+            notify('No settings changes to save.', 'info');
+            return;
+          }
+          save.mutate(changes);
+        }}
+        >Save settings</button>
       </article>
       <div className='settings-grid'>
         {groups.map((group) => (
@@ -662,8 +740,14 @@ function Logs() {
 
 function Layout() {
   const [navCollapsed, setNavCollapsed] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data as Record<string, string> });
   const [themeMode, setThemeMode] = useState<'dark' | 'light' | 'system'>('system');
+  const notify = (message: string, kind: Notification['kind'] = 'success') => {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    setNotifications((prev) => [...prev, { id, message, kind }]);
+    window.setTimeout(() => setNotifications((prev) => prev.filter((item) => item.id !== id)), 3500);
+  };
   useEffect(() => {
     const preferredTheme = (localStorage.getItem('ui-theme-mode') as 'dark' | 'light' | 'system' | null)
       || (settings.data?.ui_theme_default as 'dark' | 'light' | 'system' | undefined)
@@ -694,8 +778,9 @@ function Layout() {
     ['/logs', 'Logs', '📜'],
   ] as const;
   return (
-    <div className={`layout ${navCollapsed ? 'nav-collapsed' : ''}`}>
-      <aside>
+    <NotificationContext.Provider value={{ notify }}>
+      <div className={`layout ${navCollapsed ? 'nav-collapsed' : ''}`}>
+        <aside>
         <div className='sidebar-shell'>
           <div className='sidebar-top'>
             {!navCollapsed ? <><h2>ReimagineDoomscrolling</h2><p className='muted product-subtitle'>Reader OS</p></> : null}
@@ -722,30 +807,44 @@ function Layout() {
             </div>
           ) : null}
         </div>
-      </aside>
-      <main>
-        <Routes>
-          <Route path='/' element={<Home />} />
-          <Route path='/sources' element={<Sources />} />
-          <Route path='/sources/:id' element={<SourceDetail />} />
-          <Route path='/jobs' element={<Jobs />} />
-          <Route path='/library' element={<Library />} />
-          <Route path='/collections' element={<CollectionsPage />} />
-          <Route path='/collections/:id' element={<CollectionsPage />} />
-          <Route path='/reader/:id' element={<Reader />} />
-          <Route path='/settings' element={<Settings />} />
-          <Route path='/diagnostics' element={<Diagnostics />} />
-          <Route path='/logs' element={<Logs />} />
-        </Routes>
-      </main>
-    </div>
+        </aside>
+        <main>
+          <Routes>
+            <Route path='/' element={<Home />} />
+            <Route path='/sources' element={<Sources />} />
+            <Route path='/sources/:id' element={<SourceDetail />} />
+            <Route path='/jobs' element={<Jobs />} />
+            <Route path='/library' element={<Library />} />
+            <Route path='/collections' element={<CollectionsPage />} />
+            <Route path='/collections/:id' element={<CollectionsPage />} />
+            <Route path='/reader/:id' element={<Reader />} />
+            <Route path='/settings' element={<Settings />} />
+            <Route path='/diagnostics' element={<Diagnostics />} />
+            <Route path='/logs' element={<Logs />} />
+          </Routes>
+        </main>
+      </div>
+      <div className='notification-stack' aria-live='polite'>
+        {notifications.map((item) => (
+          <div key={item.id} className={`notification ${item.kind}`}>
+            <span>{item.message}</span>
+            <button type='button' onClick={() => setNotifications((prev) => prev.filter((n) => n.id !== item.id))}>Dismiss</button>
+          </div>
+        ))}
+      </div>
+    </NotificationContext.Provider>
   );
 }
 
 function Jobs() {
   const queryClient = useQueryClient();
+  const { notify } = useNotifications();
   const jobs = useQuery({ queryKey: ['jobs'], queryFn: async () => (await api.get('/jobs')).data as Job[] });
-  const retry = useMutation({ mutationFn: async (id: number) => api.post(`/jobs/${id}/retry`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['jobs'] }) });
+  const retry = useMutation({
+    mutationFn: async (id: number) => api.post(`/jobs/${id}/retry`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['jobs'] }); notify('Job retry queued.'); },
+    onError: () => notify('Job retry failed.', 'error'),
+  });
   return (
     <Page title='Jobs'>
       <article className='card'><table><thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Created</th><th>Action</th></tr></thead><tbody>{(jobs.data ?? []).map((job) => <tr key={job.id}><td>{job.id}</td><td>{job.type}</td><td>{job.status}</td><td>{new Date(job.created_at).toLocaleString()}</td><td>{job.status.includes('fail') ? <button onClick={() => retry.mutate(job.id)}>Retry</button> : <span className='muted'>—</span>}</td></tr>)}</tbody></table></article>
