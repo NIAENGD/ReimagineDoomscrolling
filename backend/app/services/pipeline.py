@@ -48,7 +48,8 @@ def refresh_source(db, source_id: int):
         return
     run = RefreshRun(source_id=source_id, status="running", summary="")
     db.add(run)
-    db.flush()
+    db.commit()
+    db.refresh(run)
 
     fetched_count = 0
     filtered_count = 0
@@ -145,6 +146,7 @@ def refresh_source(db, source_id: int):
         db.add(item)
         db.flush()
         _set_item_status(db, item, ItemStatus.queued)
+        db.commit()
         enqueued_count += 1
         try:
             process_video_item(db, item.id)

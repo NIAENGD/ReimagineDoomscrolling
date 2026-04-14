@@ -497,7 +497,7 @@ function Settings() {
         { key: 'source_default_discovery_mode', label: 'Discovery mode', type: 'select', options: [{ label: 'Latest N', value: 'latest_n' }, { label: 'Rolling window', value: 'rolling_window' }] },
         { key: 'source_default_max_videos', label: 'Max videos per run', type: 'range', min: 1, max: 100, step: 1 },
         { key: 'source_default_rolling_window_hours', label: 'Rolling window (hours)', type: 'range', min: 1, max: 336, step: 1 },
-        { key: 'source_default_min_duration_seconds', label: 'Min duration (seconds)', type: 'range', min: 0, max: 3600, step: 30 },
+        { key: 'source_default_min_duration_seconds', label: 'Min duration (seconds)', type: 'range', min: 120, max: 600, step: 60, description: 'Range: 2 to 10 minutes.' },
         { key: 'source_default_skip_shorts', label: 'Skip shorts', type: 'select', options: [{ label: 'Enabled', value: 'true' }, { label: 'Disabled', value: 'false' }] },
         { key: 'source_default_dedup_policy', label: 'De-duplication', type: 'select', options: [{ label: 'Source video ID', value: 'source_video_id' }, { label: 'Title + source', value: 'title_source' }] },
       ],
