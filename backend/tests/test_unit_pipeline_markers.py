@@ -22,6 +22,7 @@ def test_generate_title_and_score_retries_on_placeholder_markers(monkeypatch):
         marker_b="[/",
         marker_c="%x",
         marker_d="^#",
+        title_output_language="English",
     )
 
     assert title == "Useful rewritten title"
@@ -47,6 +48,7 @@ def test_generate_title_and_score_rejects_blocked_score_variation(monkeypatch):
         marker_b="[/",
         marker_c="%x",
         marker_d="^#",
+        title_output_language="English",
     )
 
     assert title == "Valid title"
