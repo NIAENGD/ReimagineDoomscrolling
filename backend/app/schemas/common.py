@@ -22,6 +22,7 @@ class SettingsPatch(BaseModel):
     generation_temperature: float | None = Field(default=None, ge=0, le=2)
     generation_timeout_seconds: int | None = Field(default=None, ge=300, le=3600)
     generation_max_tokens: int | None = Field(default=None, ge=64, le=30000)
+    generation_metadata_max_tokens: int | None = Field(default=None, ge=64, le=4000)
     global_prompt_template: str | None = None
     title_prompt_template: str | None = None
     score_prompt_template: str | None = None
