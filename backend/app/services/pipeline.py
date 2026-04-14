@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import re
 
 from sqlalchemy import select
 
@@ -16,7 +17,7 @@ from app.models.entities import (
     Transcript,
     VideoItem,
 )
-from app.services.generation import ProviderConfig, generate_article, render_prompt
+from app.services.generation import ProviderConfig, generate_article, generate_text, render_prompt
 from app.services.ops import log_event
 from app.services.transcript import fetch_transcript, should_fallback_to_transcription, transcribe_audio_locally
 from app.services.youtube import discover_videos, evaluate_video_policy, normalize_source_url, resolve_source_identity
@@ -40,6 +41,61 @@ def _set_item_status(db, item: VideoItem, to_status: ItemStatus, message: str = 
             message=message,
         )
     )
+
+
+def _extract_single_marker(text: str, pattern: str) -> str:
+    matches = re.findall(pattern, text, flags=re.DOTALL)
+    if len(matches) != 1:
+        return ""
+    return matches[0].strip()
+
+
+def _generate_descriptive_title(transcript: str, original_title: str, cfg: ProviderConfig, prompt_template: str, marker_a: str, marker_b: str, marker_c: str, marker_d: str) -> str:
+    prompt = (
+        f"{prompt_template}\n\n"
+        "You receive a transcript and original YouTube title. Rewrite to a clear, descriptive title.\n"
+        "Avoid clickbait tone. Keep it factual and concise.\n"
+        "Output exactly one marker-formatted title in this format:\n"
+        f"{marker_a}{marker_b}\"TITLE\"{marker_c}{marker_d}\n"
+        "Do not repeat that marker format anywhere else.\n\n"
+        f"Original title:\n{original_title}\n\nTranscript:\n{transcript}"
+    )
+    escaped = [re.escape(s) for s in [marker_a, marker_b, marker_c, marker_d]]
+    pattern = f"{escaped[0]}{escaped[1]}\\\"([^\\\"]+)\\\"{escaped[2]}{escaped[3]}"
+    for _ in range(3):
+        output = generate_text(prompt, cfg)
+        title = _extract_single_marker(output, pattern)
+        if title:
+            return title
+    raise ValueError("Could not produce a uniquely marked AI title after 3 attempts")
+
+
+def _generate_quality_report(transcript: str, title: str, cfg: ProviderConfig, prompt_template: str) -> tuple[str, str, int]:
+    prompt = (
+        f"{prompt_template}\n\n"
+        "请严格输出以下格式，并且仅出现一次评分标记：\n"
+        "===SCORE_START===\n"
+        "视频类别：【写出类别】\n"
+        "类别评分：逻辑（混乱/误导性/清晰 + 一句话原因）；深度（阐述/起因/深层/底层 + 一句话原因）；"
+        "见解（粗浅/深层/底层 + 一句话原因）；表达（呆板/自然/生动 + 一句话原因）；"
+        "启发性（中性/有启发/强激励 + 一句话原因）\n"
+        "综合质量分：【0-100，极严格】\n"
+        "盲点与挑战：【一句话，简洁理性】\n"
+        "===SCORE_END===\n\n"
+        f"标题：{title}\n\n转录文本：\n{transcript}"
+    )
+    for _ in range(3):
+        output = generate_text(prompt, cfg)
+        report = _extract_single_marker(output, r"===SCORE_START===\s*(.*?)\s*===SCORE_END===")
+        if not report:
+            continue
+        category = _extract_single_marker(report, r"视频类别：\s*[【\[]?\s*(.+?)\s*[】\]]?(?:\n|$)") or "未分类"
+        score_raw = _extract_single_marker(report, r"综合质量分：\s*[【\[]?\s*(\d{1,3})\s*[】\]]?")
+        if not score_raw:
+            continue
+        score = max(0, min(100, int(score_raw)))
+        return report, category, score
+    raise ValueError("Could not produce a uniquely marked AI quality report after 3 attempts")
 
 
 def refresh_source(db, source_id: int):
@@ -259,25 +315,73 @@ def process_video_item(db, item_id: int):
         temperature = float(_get_setting(db, "generation_temperature", "0.2"))
         max_tokens = int(_get_setting(db, "generation_max_tokens", "30000"))
         prompt_template = source.prompt_override if source and source.prompt_override else global_template
-        prompt = render_prompt(prompt_template, text, "")
-        body = generate_article(
-            text,
-            prompt,
-            ProviderConfig(
-                provider=provider_name,
-                model=model_name,
-                temperature=temperature,
-                timeout_seconds=timeout_seconds,
-                max_tokens=max_tokens,
-                openai_api_key=_get_setting(db, "openai_api_key", ""),
-                openai_base_url=_get_setting(db, "openai_base_url", ""),
-                lmstudio_base_url=_get_setting(db, "lmstudio_base_url", ""),
-            ),
+        title_prompt_template = _get_setting(
+            db,
+            "title_prompt_template",
+            "Rewrite the video title into a descriptive, non-clickbait title that matches the transcript.",
         )
+        score_prompt_template = _get_setting(
+            db,
+            "score_prompt_template",
+            "Evaluate this video transcript with strict scoring and concise rationale.",
+        )
+        marker_a = _get_setting(db, "title_identifier_a", "d}")
+        marker_b = _get_setting(db, "title_identifier_b", "[/")
+        marker_c = _get_setting(db, "title_identifier_c", "%x")
+        marker_d = _get_setting(db, "title_identifier_d", "^#")
+        cfg = ProviderConfig(
+            provider=provider_name,
+            model=model_name,
+            temperature=temperature,
+            timeout_seconds=timeout_seconds,
+            max_tokens=max_tokens,
+            openai_api_key=_get_setting(db, "openai_api_key", ""),
+            openai_base_url=_get_setting(db, "openai_base_url", ""),
+            lmstudio_base_url=_get_setting(db, "lmstudio_base_url", ""),
+        )
+        ai_title = item.title
+        quality_report = ""
+        quality_category = ""
+        quality_score = 0
+        if provider_name.lower() not in {"none", "raw", "raw_transcript"}:
+            try:
+                ai_title = _generate_descriptive_title(
+                    text,
+                    item.title,
+                    cfg,
+                    title_prompt_template,
+                    marker_a,
+                    marker_b,
+                    marker_c,
+                    marker_d,
+                )
+            except Exception as exc:
+                log_event(db, "WARNING", "process_item.ai_title", f"AI title fallback: {exc}", source_id=item.source_id, item_id=item.id)
+                ai_title = item.title
+            try:
+                quality_report, quality_category, quality_score = _generate_quality_report(
+                    text,
+                    ai_title,
+                    cfg,
+                    score_prompt_template,
+                )
+            except Exception as exc:
+                log_event(db, "WARNING", "process_item.ai_score", f"AI score fallback: {exc}", source_id=item.source_id, item_id=item.id)
+                quality_report, quality_category, quality_score = "", "", 0
+        prompt = render_prompt(prompt_template, text, "")
+        body = generate_article(text, prompt, cfg)
 
         article = db.execute(select(Article).where(Article.video_item_id == item.id)).scalar_one_or_none()
         if not article:
-            article = Article(video_item_id=item.id, title=item.title, latest_version=1)
+            article = Article(
+                video_item_id=item.id,
+                title=item.title,
+                ai_title=ai_title,
+                ai_video_category=quality_category,
+                ai_quality_score=quality_score,
+                ai_quality_report=quality_report,
+                latest_version=1,
+            )
             db.add(article)
             db.flush()
             db.add(ReadingProgress(article_id=article.id, position=0, total=0))
@@ -285,6 +389,10 @@ def process_video_item(db, item_id: int):
         else:
             version_num = article.latest_version + 1
             article.latest_version = version_num
+            article.ai_title = ai_title
+            article.ai_video_category = quality_category
+            article.ai_quality_score = quality_score
+            article.ai_quality_report = quality_report
 
         db.add(ArticleVersion(article_id=article.id, version=version_num, mode="default", prompt_snapshot=prompt, body=body))
         _set_item_status(db, item, ItemStatus.generation_completed)

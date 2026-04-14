@@ -69,6 +69,38 @@ def _chat_completion(base_url: str, api_key: str, model: str, prompt: str, tempe
     return _strip_reasoning_artifacts(raw)
 
 
+def generate_text(prompt: str, cfg: ProviderConfig) -> str:
+    provider = (cfg.provider or "openai").lower()
+    if provider in {"none", "raw", "raw_transcript"}:
+        raise ValueError("Text generation is unavailable when provider is raw")
+
+    if provider == "openai":
+        if not (cfg.openai_api_key or settings.openai_api_key):
+            raise ValueError("OPENAI_API_KEY is required when provider is openai")
+        return _chat_completion(
+            base_url=cfg.openai_base_url or settings.openai_base_url,
+            api_key=cfg.openai_api_key or settings.openai_api_key,
+            model=cfg.model,
+            prompt=prompt,
+            temperature=cfg.temperature,
+            timeout_seconds=cfg.timeout_seconds,
+            max_tokens=cfg.max_tokens,
+        )
+
+    if provider in {"lmstudio", "openai_compatible"}:
+        return _chat_completion(
+            base_url=cfg.lmstudio_base_url or settings.lmstudio_base_url,
+            api_key="",
+            model=cfg.model,
+            prompt=prompt,
+            temperature=cfg.temperature,
+            timeout_seconds=cfg.timeout_seconds,
+            max_tokens=cfg.max_tokens,
+        )
+
+    raise ValueError(f"Unsupported generation provider: {cfg.provider}")
+
+
 def _strip_reasoning_artifacts(text: str) -> str:
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL)
     cleaned = re.sub(r"```(?:thinking|reasoning)[\s\S]*?```", "", cleaned, flags=re.IGNORECASE)
@@ -96,28 +128,4 @@ def generate_article(transcript: str, prompt: str, cfg: ProviderConfig) -> str:
     if provider in {"none", "raw", "raw_transcript"}:
         return _clean_raw_transcript(transcript)
 
-    if provider == "openai":
-        if not (cfg.openai_api_key or settings.openai_api_key):
-            raise ValueError("OPENAI_API_KEY is required when provider is openai")
-        return _chat_completion(
-            base_url=cfg.openai_base_url or settings.openai_base_url,
-            api_key=cfg.openai_api_key or settings.openai_api_key,
-            model=cfg.model,
-            prompt=prompt,
-            temperature=cfg.temperature,
-            timeout_seconds=cfg.timeout_seconds,
-            max_tokens=cfg.max_tokens,
-        )
-
-    if provider in {"lmstudio", "openai_compatible"}:
-        return _chat_completion(
-            base_url=cfg.lmstudio_base_url or settings.lmstudio_base_url,
-            api_key="",
-            model=cfg.model,
-            prompt=prompt,
-            temperature=cfg.temperature,
-            timeout_seconds=cfg.timeout_seconds,
-            max_tokens=cfg.max_tokens,
-        )
-
-    raise ValueError(f"Unsupported generation provider: {cfg.provider}")
+    return generate_text(prompt, cfg)

@@ -23,6 +23,12 @@ class SettingsPatch(BaseModel):
     generation_timeout_seconds: int | None = Field(default=None, ge=300, le=3600)
     generation_max_tokens: int | None = Field(default=None, ge=64, le=30000)
     global_prompt_template: str | None = None
+    title_prompt_template: str | None = None
+    score_prompt_template: str | None = None
+    title_identifier_a: str | None = None
+    title_identifier_b: str | None = None
+    title_identifier_c: str | None = None
+    title_identifier_d: str | None = None
     retain_failed_audio: bool | None = None
     delete_audio_after_success: bool | None = None
     temp_cleanup_ttl_hours: int | None = Field(default=None, ge=1, le=24 * 30)
