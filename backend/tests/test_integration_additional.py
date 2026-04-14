@@ -116,3 +116,32 @@ def test_delete_source_removes_dependent_refresh_runs_and_job_items():
         deleted = client.delete(f"/api/sources/{source_id}")
         assert deleted.status_code == 200
         assert deleted.json() == {"deleted": True}
+
+
+def test_delete_source_removes_job_items_before_video_jobs():
+    from app.db.session import SessionLocal
+    from app.models.entities import Job, JobItem, Source, VideoItem
+
+    with TestClient(app) as client:
+        created = client.post("/api/sources", json={"url": "https://youtube.com/channel/delete-video-jobs", "title": "Delete video jobs"})
+        assert created.status_code == 200
+        source_id = created.json()["id"]
+
+        db = SessionLocal()
+        try:
+            src = db.get(Source, source_id)
+            assert src is not None
+            video = VideoItem(source_id=source_id, video_id="abc123xyz99", url="https://youtu.be/abc123xyz99")
+            db.add(video)
+            db.flush()
+            job = Job(type="generate_article", status="queued", video_item_id=video.id)
+            db.add(job)
+            db.flush()
+            db.add(JobItem(job_id=job.id, video_item_id=video.id, status="queued"))
+            db.commit()
+        finally:
+            db.close()
+
+        deleted = client.delete(f"/api/sources/{source_id}")
+        assert deleted.status_code == 200
+        assert deleted.json() == {"deleted": True}

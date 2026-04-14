@@ -313,13 +313,14 @@ def delete_source(source_id: int, db: Session = Depends(get_db)):
         db.query(ReadingProgress).filter(ReadingProgress.article_id.in_(article_ids)).delete(synchronize_session=False)
         db.query(ArticleVersion).filter(ArticleVersion.article_id.in_(article_ids)).delete(synchronize_session=False)
         db.query(Article).filter(Article.id.in_(article_ids)).delete(synchronize_session=False)
+    if job_ids:
+        db.query(JobItem).filter(JobItem.job_id.in_(job_ids)).delete(synchronize_session=False)
     if video_ids:
+        db.query(JobItem).filter(JobItem.video_item_id.in_(video_ids)).delete(synchronize_session=False)
         db.query(ItemStatusTransition).filter(ItemStatusTransition.video_item_id.in_(video_ids)).delete(synchronize_session=False)
         db.query(Transcript).filter(Transcript.video_item_id.in_(video_ids)).delete(synchronize_session=False)
         db.query(Job).filter(Job.video_item_id.in_(video_ids)).delete(synchronize_session=False)
         db.query(VideoItem).filter(VideoItem.id.in_(video_ids)).delete(synchronize_session=False)
-    if job_ids:
-        db.query(JobItem).filter(JobItem.job_id.in_(job_ids)).delete(synchronize_session=False)
     db.query(RefreshRun).filter(RefreshRun.source_id == source_id).delete(synchronize_session=False)
     db.query(Job).filter(Job.source_id == source_id).delete()
     db.delete(src)
