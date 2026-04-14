@@ -21,8 +21,7 @@ class SettingsPatch(BaseModel):
     retry_default_backoff_multiplier: int | None = Field(default=None, ge=1, le=8)
     generation_temperature: float | None = Field(default=None, ge=0, le=2)
     generation_timeout_seconds: int | None = Field(default=None, ge=5, le=300)
-    generation_max_tokens: int | None = Field(default=None, ge=64, le=12000)
-    generation_mode: str | None = None
+    generation_max_tokens: int | None = Field(default=None, ge=64, le=30000)
     global_prompt_template: str | None = None
     retain_failed_audio: bool | None = None
     delete_audio_after_success: bool | None = None
