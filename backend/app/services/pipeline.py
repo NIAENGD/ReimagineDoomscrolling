@@ -81,14 +81,10 @@ def _generate_title_and_score(
     prompt = (
         f"{title_prompt_template}\n"
         f"{score_prompt_template}\n\n"
-        "You receive a transcript and original YouTube title. Rewrite to a clear, descriptive title.\n"
-        "Avoid clickbait tone. Keep it factual and concise.\n"
         f"Write the rewritten title in {title_output_language}.\n"
-        "Output exactly two lines and nothing else:\n"
-        f"1) Title: {marker_a}{marker_b}\"<TITLE_TEXT>\"{marker_c}{marker_d}\n"
-        f"2) Score: {score_marker_start}\"<0-100_INTEGER>\"{score_marker_end}\n"
-        "Do not output placeholder words like TITLE or SCORE. Use real values only.\n"
-        "Do not repeat marker patterns anywhere else.\n\n"
+        f"1) After analysis, output title in this format: {marker_a}{marker_b}\"TITLE_TEXT\"{marker_c}{marker_d}\n"
+        f"2) After analysis, output title in this format: {score_marker_start}\"0-100_INTEGER\"{score_marker_end}\n".
+        f"Only output results in the described format with surrounding string identifications when you finish. Don't mention them in thinking proccess.\n"
         f"Original title:\n{original_title}\n\nTranscript:\n{transcript}"
     )
     title_escaped = [re.escape(s) for s in [marker_a, marker_b, marker_c, marker_d]]
