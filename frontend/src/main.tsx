@@ -601,8 +601,20 @@ function Settings() {
     },
     {
       title: 'Generation',
-      description: 'Title and score generation is managed internally; only title language can be selected.',
+      description: 'Configure provider/model behavior and output language. Prompt templates are managed internally.',
       fields: [
+        { key: 'generation_provider', label: 'Provider', type: 'select', options: [
+          { label: 'OpenAI', value: 'openai' },
+          { label: 'LM Studio', value: 'lmstudio' },
+          { label: 'Raw transcript (no LLM)', value: 'raw' },
+        ] },
+        { key: 'generation_model', label: 'Model', type: 'text', description: 'Model identifier used by the selected provider.' },
+        { key: 'generation_temperature', label: 'Temperature', type: 'range', min: 0, max: 2, step: 0.1 },
+        { key: 'generation_timeout_seconds', label: 'Timeout (seconds)', type: 'range', min: 300, max: 3600, step: 30 },
+        { key: 'generation_max_tokens', label: 'Max output tokens', type: 'range', min: 64, max: 30000, step: 64 },
+        { key: 'openai_api_key', label: 'OpenAI API key', type: 'text' },
+        { key: 'openai_base_url', label: 'OpenAI base URL', type: 'text' },
+        { key: 'lmstudio_base_url', label: 'LM Studio base URL', type: 'text' },
         { key: 'title_output_language', label: 'Title output language', type: 'select', options: [
           { label: 'English', value: 'English' },
           { label: 'Spanish', value: 'Spanish' },
