@@ -83,7 +83,7 @@ def _generate_title_and_score(
         f"{score_prompt_template}\n\n"
         f"Write the rewritten title in {title_output_language}.\n"
         f"1) After analysis, output title in this format: {marker_a}{marker_b}\"TITLE_TEXT\"{marker_c}{marker_d}\n"
-        f"2) After analysis, output title in this format: {score_marker_start}\"0-100_INTEGER\"{score_marker_end}\n".
+        f"2) After analysis, output title in this format: {score_marker_start}\"0-100_INTEGER\"{score_marker_end}\n"
         f"Only output results in the described format with surrounding string identifications when you finish. Don't mention them in thinking proccess.\n"
         f"Original title:\n{original_title}\n\nTranscript:\n{transcript}"
     )
