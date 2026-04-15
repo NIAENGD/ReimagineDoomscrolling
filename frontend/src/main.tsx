@@ -353,7 +353,6 @@ function Library() {
             <span className='badge'>Category: {item.video_category || 'Unrated'}</span>
             <span className='badge'>Score: {item.quality_score ?? 0}</span>
           </p>
-          <p>{item.body_preview || 'No preview available.'}</p>
           <div className='row'>
             <Link to={`/reader/${item.article_id}`}>Open reader</Link>
             <button onClick={() => markRead.mutate({ articleId: item.article_id, isRead: !item.is_read })}>{item.is_read ? 'Mark unread' : 'Mark read'}</button>
@@ -372,7 +371,7 @@ function Library() {
       <section className='library-shell'>
         <aside className='card channel-filter'>
           <h3>Channels</h3>
-          <p className='muted'>Filter by source</p>
+          <p className='muted channel-filter-label'>Filter by source</p>
           {channels.map((channel) => (
             <button
               key={channel}
@@ -842,7 +841,12 @@ function Layout() {
         <aside>
         <div className='sidebar-shell'>
           <div className='sidebar-top'>
-            {!navCollapsed ? <><h2>ReimagineDoomscrolling</h2><p className='muted product-subtitle'>Reader OS</p></> : null}
+            {!navCollapsed ? (
+              <div className='sidebar-brand'>
+                <h2>ReimagineDoomscrolling</h2>
+                <p className='muted product-subtitle'>Reader OS</p>
+              </div>
+            ) : null}
             <button type='button' className='nav-toggle' onClick={() => setNavCollapsed((v) => !v)}>{navCollapsed ? '⮞' : '⮜'}</button>
           </div>
           <nav>

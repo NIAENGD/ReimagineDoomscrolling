@@ -27,8 +27,8 @@ a { color: #fff; }
 }
 .layout.nav-collapsed { grid-template-columns: 84px minmax(0, 1fr); }
 .layout.nav-collapsed .sidebar-top {
-  flex-direction: column;
-  align-items: center;
+  grid-template-columns: 1fr;
+  justify-items: center;
 }
 .layout.nav-collapsed aside nav a {
   justify-content: center;
@@ -63,11 +63,17 @@ aside nav { display: grid; gap: .4rem; }
   font-size: .86rem;
 }
 .sidebar-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: .45rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: .6rem;
   margin-bottom: 1rem;
+}
+.sidebar-brand {
+  min-width: 0;
+}
+aside h2 {
+  overflow-wrap: anywhere;
 }
 .nav-toggle {
   padding: .35rem .5rem;
@@ -75,6 +81,9 @@ aside nav { display: grid; gap: .4rem; }
   box-shadow: none;
   background: #000;
   border: 1px solid var(--border);
+  align-self: start;
+  justify-self: end;
+  flex-shrink: 0;
 }
 aside nav a {
   text-decoration: none;
@@ -153,19 +162,40 @@ main { padding: 2rem; }
 .library-shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 1rem; align-items: flex-start; }
 .library-content { display: grid; gap: 1rem; }
 .library-toolbar { display: grid; gap: .7rem; grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(130px, max-content)); }
-.channel-filter { position: sticky; top: 1rem; display: grid; gap: .45rem; max-height: calc(100vh - 3rem); overflow: auto; }
+.channel-filter {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: .35rem;
+  max-height: calc(100vh - 3rem);
+  overflow: auto;
+  align-content: start;
+}
 .channel-filter h3 { margin-bottom: .3rem; }
+.channel-filter-label {
+  margin: 0 0 .2rem;
+  font-size: .8rem;
+  line-height: 1.2;
+}
 .chip {
   text-align: left;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: .55rem .65rem;
+  gap: .45rem;
+  min-height: 2.1rem;
+  padding: .42rem .6rem;
   border-radius: 10px;
   background: rgba(20, 35, 76, 0.8);
   background: #000;
   border: 1px solid var(--border);
   box-shadow: none;
+}
+.chip span:first-child {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chip.active {
   background: #111;
