@@ -110,7 +110,39 @@ def test_handle_feed_falls_back_to_channel_id_when_user_feed_is_empty(monkeypatc
 
 def test_candidate_feed_urls_repairs_legacy_channel_id_without_uc_prefix():
     urls = _candidate_feed_urls("https://www.youtube.com/@EconomicsExplained", "Z4AMrDcNrfy3X6nsU8-rPg")
-    assert urls == ["https://www.youtube.com/feeds/videos.xml?channel_id=UCZ4AMrDcNrfy3X6nsU8-rPg"]
+    assert urls[0] == "https://www.youtube.com/feeds/videos.xml?channel_id=UCZ4AMrDcNrfy3X6nsU8-rPg"
+
+
+def test_candidate_feed_urls_falls_back_when_persisted_channel_id_is_stale(monkeypatch):
+    class FakeResponse:
+        def __init__(self, text):
+            self.text = text
+            self.url = "https://www.youtube.com/@EconomicsExplained"
+
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def get(self, url):
+            return FakeResponse("<html><body>feeds/videos.xml?channel_id=UCNEWCHANNELID123456789012</body></html>")
+
+    monkeypatch.setattr("app.services.youtube.httpx.Client", FakeClient)
+
+    urls = _candidate_feed_urls("https://www.youtube.com/@EconomicsExplained", "UCSTALECHANNELID123456789012")
+    assert urls == [
+        "https://www.youtube.com/feeds/videos.xml?channel_id=UCSTALECHANNELID123456789012",
+        "https://www.youtube.com/feeds/videos.xml?user=EconomicsExplained",
+        "https://www.youtube.com/feeds/videos.xml?channel_id=UCNEWCHANNELID123456789012",
+    ]
 
 
 def test_transcribe_audio_locally_retries_yt_dlp_with_extractor_args(monkeypatch):

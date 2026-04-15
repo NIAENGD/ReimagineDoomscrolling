@@ -102,24 +102,32 @@ def _extract_channel_id_from_page(source_url: str) -> str:
 
 def _candidate_feed_urls(source_url: str, channel_id: str = "") -> list[str]:
     candidates: list[str] = []
+    seen: set[str] = set()
+
+    def add_candidate(url: str) -> None:
+        if url and url not in seen:
+            seen.add(url)
+            candidates.append(url)
+
     normalized_channel_id = _normalize_channel_id(channel_id)
     if normalized_channel_id:
-        return [f"{YOUTUBE_FEED_BASE}?channel_id={normalized_channel_id}"]
+        add_candidate(f"{YOUTUBE_FEED_BASE}?channel_id={normalized_channel_id}")
 
     parsed = urlparse(source_url)
     path = parsed.path.rstrip("/")
 
     if path.startswith("/channel/"):
         source_channel_id = _normalize_channel_id(path.split("/", 2)[2])
-        return [f"{YOUTUBE_FEED_BASE}?channel_id={source_channel_id}"]
+        add_candidate(f"{YOUTUBE_FEED_BASE}?channel_id={source_channel_id}")
+        return candidates
     if path.startswith("/@") or path.startswith("/c/") or path.startswith("/user/"):
         handle_or_name = path.split("/", 2)[1].lstrip("@")
         if handle_or_name:
-            candidates.append(f"{YOUTUBE_FEED_BASE}?user={handle_or_name}")
+            add_candidate(f"{YOUTUBE_FEED_BASE}?user={handle_or_name}")
         try:
             resolved_channel_id = _extract_channel_id_from_page(source_url)
             if resolved_channel_id:
-                candidates.append(f"{YOUTUBE_FEED_BASE}?channel_id={resolved_channel_id}")
+                add_candidate(f"{YOUTUBE_FEED_BASE}?channel_id={resolved_channel_id}")
         except Exception:
             pass
         if candidates:
@@ -128,7 +136,8 @@ def _candidate_feed_urls(source_url: str, channel_id: str = "") -> list[str]:
     query = parse_qs(parsed.query)
     if "channel_id" in query and query["channel_id"]:
         query_channel_id = _normalize_channel_id(query["channel_id"][0])
-        return [f"{YOUTUBE_FEED_BASE}?channel_id={query_channel_id}"]
+        add_candidate(f"{YOUTUBE_FEED_BASE}?channel_id={query_channel_id}")
+        return candidates
 
     raise ValueError("Unsupported YouTube source URL format for discovery")
 
