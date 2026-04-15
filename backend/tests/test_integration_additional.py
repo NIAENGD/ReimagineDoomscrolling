@@ -145,3 +145,14 @@ def test_delete_source_removes_job_items_before_video_jobs():
         deleted = client.delete(f"/api/sources/{source_id}")
         assert deleted.status_code == 200
         assert deleted.json() == {"deleted": True}
+
+
+def test_root_and_unprefixed_health_endpoints_are_available_for_connectivity_checks():
+    with TestClient(app) as client:
+        root = client.get('/')
+        assert root.status_code == 200
+        assert root.json() == {'status': 'ok', 'api': '/api'}
+
+        health = client.get('/health')
+        assert health.status_code == 200
+        assert health.json() == {'status': 'ok'}
