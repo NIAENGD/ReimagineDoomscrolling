@@ -19,7 +19,7 @@ import {
 } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import ReactMarkdown from 'react-markdown';
-import { api } from './lib/api';
+import { api, getBackendAddress, setBackendAddress, testBackendConnection } from './lib/api';
 import './styles.css';
 
 const qc = new QueryClient();
@@ -544,6 +544,7 @@ function CollectionsPage() {
 function Settings() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const [backendAddress, setBackendAddressInput] = useState(getBackendAddress);
   const { notify } = useNotifications();
   const settingsTemplate = useMemo(() => ({
     timezone: 'UTC',
@@ -563,6 +564,11 @@ function Settings() {
       notify('Settings saved.');
     },
     onError: () => notify('Settings failed to save.', 'error'),
+  });
+  const testBackend = useMutation({
+    mutationFn: async (address: string) => testBackendConnection(address),
+    onSuccess: () => notify('Backend connection succeeded.'),
+    onError: (error) => notify(getApiErrorMessage(error, 'Could not reach backend address.'), 'error'),
   });
 
   const merged = { ...settingsTemplate, ...(settings.data ?? {}), ...draft };
@@ -652,6 +658,40 @@ function Settings() {
 
   return (
     <Page title='Settings'>
+      <article className='card'>
+        <h2>Backend connection</h2>
+        <p className='muted'>Set the backend host used by this frontend (for example, 192.168.1.10:8000).</p>
+        <div className='row'>
+          <input
+            type='text'
+            value={backendAddress}
+            onChange={(e) => setBackendAddressInput(e.target.value)}
+            placeholder='localhost:8000'
+          />
+          <button
+            type='button'
+            onClick={() => testBackend.mutate(backendAddress)}
+            disabled={testBackend.isPending}
+          >
+            {testBackend.isPending ? 'Testing…' : 'Test connection'}
+          </button>
+          <button
+            type='button'
+            onClick={() => {
+              try {
+                const nextAddress = setBackendAddress(backendAddress);
+                setBackendAddressInput(getBackendAddress());
+                queryClient.invalidateQueries();
+                notify(`Backend address saved: ${nextAddress}`);
+              } catch {
+                notify('Invalid backend address. Please use host:port or a full URL.', 'error');
+              }
+            }}
+          >
+            Save backend address
+          </button>
+        </div>
+      </article>
       <article className='card settings-toolbar'>
         <div>
           <h2>System settings</h2>
