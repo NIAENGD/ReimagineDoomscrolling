@@ -25,16 +25,7 @@ def render_prompt(template: str, transcript: str, mode: str) -> str:
 
 
 def _mode_instruction(prompt: str) -> str:
-    lower = prompt.lower()
-    if "concise" in lower:
-        return "Write a concise article with short sections and minimal repetition."
-    if "study_notes" in lower:
-        return "Write study notes with headings, bullet points, and key takeaways."
-    if "executive_brief" in lower:
-        return "Write an executive brief with decisions, risks, and next actions."
-    if "tutorial_reconstruction" in lower:
-        return "Write a tutorial reconstruction with ordered steps and prerequisites."
-    return "Write a detailed article with clear structure and examples."
+    return ""
 
 
 def _chat_completion(base_url: str, api_key: str, model: str, prompt: str, temperature: float, timeout_seconds: float, max_tokens: int) -> str:
@@ -49,9 +40,7 @@ def _chat_completion(base_url: str, api_key: str, model: str, prompt: str, tempe
             {
                 "role": "system",
                 "content": (
-                    "You convert transcripts into polished reading articles. "
-                    "Return only the final article body. Do not include reasoning, chain-of-thought, thinking process, "
-                    "analysis notes, scratchpad text, or XML tags like <think>. "
+                    "以原作者视角，忠实呈现视频中的观点、思路、结构和情绪，不加任何旁人评价或个人观点。标题/小标题分明，段落清晰；语言优美自然，贴合原风格。原汁原味还原引用、比喻、故事、幽默等表现手法；保持视频作者的个性（如讽刺、深情等）。开头简要介绍视频内容，结尾收束主要结论或号召；绝不提及“视频”，直接以文章形式呈现。切记！这并不是一个TLDR，或是总结，而是完整的文稿。切记！必须使用中文回答。切记！这不是一个总结，你需要输出尽量还原原视频的长度。 "
                     f"{_mode_instruction(prompt)}"
                 ),
             },
