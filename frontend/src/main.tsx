@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import {
   BrowserRouter,
@@ -451,7 +451,11 @@ function Reader() {
     },
     onError: () => notify('Could not update read state.', 'error'),
   });
-  const saveProgress = useMutation({ mutationFn: async (payload: { position: number; total: number }) => api.post(`/articles/${id}/progress`, payload) });
+  const saveProgress = useMutation({
+    mutationFn: async (payload: { position: number; total: number }) => api.post(`/articles/${id}/progress`, payload),
+    retry: false,
+  });
+  const lastProgressSaveKey = useRef<string | null>(null);
 
   const version = useMemo(() => {
     const versions = detail.data?.versions ?? [];
@@ -478,9 +482,12 @@ function Reader() {
   const activeContent = tab === 'article' ? (body || 'No content available.') : (transcript.data?.text || 'Transcript unavailable.');
 
   useEffect(() => {
-    if (!id || !activeContent.trim()) return;
+    if (!id || !detail.isSuccess || !detail.data?.id || !activeContent.trim()) return;
+    const progressKey = `${id}:${tab}:${version?.version ?? 'none'}:${activeContent.length}`;
+    if (lastProgressSaveKey.current === progressKey) return;
+    lastProgressSaveKey.current = progressKey;
     saveProgress.mutate({ position: 1, total: 1 });
-  }, [activeContent, id, saveProgress, tab, version?.version]);
+  }, [activeContent, detail.data?.id, detail.isSuccess, id, tab, version?.version]);
 
   return (
     <Page title='Reader'>
