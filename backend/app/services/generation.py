@@ -12,7 +12,7 @@ from app.core.config import settings
 class ProviderConfig:
     provider: str
     model: str
-    temperature: float = 0.2
+    temperature: float = 0.4
     timeout_seconds: float = 60.0
     max_tokens: int = 1200
     openai_api_key: str = ""
@@ -40,7 +40,7 @@ def _chat_completion(base_url: str, api_key: str, model: str, prompt: str, tempe
             {
                 "role": "system",
                 "content": (
-                    "以原作者视角，忠实呈现视频中的观点、思路、结构和情绪，不加任何旁人评价或个人观点。标题/小标题分明，段落清晰；语言优美自然，贴合原风格。原汁原味还原引用、比喻、故事、幽默等表现手法；保持视频作者的个性（如讽刺、深情等）。开头简要介绍视频内容，结尾收束主要结论或号召；绝不提及“视频”，直接以文章形式呈现。切记！这并不是一个TLDR，或是总结，而是完整的文稿。切记！必须使用中文回答。切记！这不是一个总结，你需要输出尽量还原原视频的长度，不要缩短任何地方。 "
+                    "以原作者视角，用叙述的形式忠实呈现视频中的观点、思路、结构和情绪，不加任何旁人评价或个人观点。段落清晰，不刻意分节，不改变，不标注结构，不使用任何结构符号包括bullet points；语言优美自然，贴合原风格。原汁原味还原引用、比喻、故事、幽默等表现手法；保持视频作者的个性（如讽刺、深情等）。开头简要介绍视频内容，结尾收束主要结论或号召；绝不提及“视频”，直接以文章形式呈现。切记！这并不是一个TLDR，或是总结，而是完整的文稿。切记！必须使用中文回答。切记！这不是一个总结，你需要输出尽量还原原视频的长度，不要缩短任何地方。 "
                     f"{_mode_instruction(prompt)}"
                 ),
             },
