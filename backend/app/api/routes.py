@@ -615,9 +615,26 @@ def mark_read_state(article_id: int, payload: MarkReadPayload, db: Session = Dep
     article = db.get(Article, article_id)
     if not article:
         raise HTTPException(404)
+    if payload.is_read:
+        video_item_id = article.video_item_id
+        db.query(CollectionArticle).filter(CollectionArticle.article_id == article_id).delete(synchronize_session=False)
+        db.query(ReadingProgress).filter(ReadingProgress.article_id == article_id).delete(synchronize_session=False)
+        db.query(ArticleVersion).filter(ArticleVersion.article_id == article_id).delete(synchronize_session=False)
+        db.query(Article).filter(Article.id == article_id).delete(synchronize_session=False)
+        # Keep the VideoItem row so future refreshes deduplicate by source+video_id and do not fetch again.
+        db.query(Transcript).filter(Transcript.video_item_id == video_item_id).delete(synchronize_session=False)
+        db.query(ItemStatusTransition).filter(ItemStatusTransition.video_item_id == video_item_id).delete(synchronize_session=False)
+        db.query(JobItem).filter(JobItem.video_item_id == video_item_id).delete(synchronize_session=False)
+        db.query(Job).filter(Job.video_item_id == video_item_id).delete(synchronize_session=False)
+        video_item = db.get(VideoItem, video_item_id)
+        if video_item:
+            video_item.status = ItemStatus.skipped_by_policy
+            video_item.status_message = "Marked read and removed by user"
+        db.commit()
+        return {"saved": True, "deleted": True}
     article.is_read = payload.is_read
     db.commit()
-    return {"saved": True}
+    return {"saved": True, "deleted": False}
 
 
 @router.post('/articles/{article_id}/progress')

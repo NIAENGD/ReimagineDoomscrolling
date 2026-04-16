@@ -320,8 +320,24 @@ function Library() {
 
   const markRead = useMutation({
     mutationFn: async ({ articleId, isRead }: { articleId: number; isRead: boolean }) => api.post(`/articles/${articleId}/read-state`, { is_read: isRead }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['library'] }); notify('Read state updated.'); },
-    onError: () => notify('Could not update read state.', 'error'),
+    onMutate: async ({ articleId, isRead }) => {
+      if (!isRead) return;
+      await queryClient.cancelQueries({ queryKey: ['library'] });
+      const snapshots = queryClient.getQueriesData<LibraryItem[]>({ queryKey: ['library'] });
+      snapshots.forEach(([key, current]) => {
+        if (!current) return;
+        queryClient.setQueryData(key, current.filter((item) => item.article_id !== articleId));
+      });
+      return { snapshots };
+    },
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      notify(variables.isRead ? 'Article removed.' : 'Read state updated.');
+    },
+    onError: (_error, variables, context) => {
+      context?.snapshots?.forEach(([key, value]: [readonly unknown[], LibraryItem[] | undefined]) => queryClient.setQueryData(key, value));
+      notify(variables.isRead ? 'Could not remove article.' : 'Could not update read state.', 'error');
+    },
   });
   const addToCollection = useMutation({
     mutationFn: async ({ articleId, collectionId }: { articleId: number; collectionId: number }) => api.post(`/collections/${collectionId}/articles/${articleId}`),
@@ -404,6 +420,7 @@ function Library() {
 
 function Reader() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [tab, setTab] = useState<'article' | 'transcript'>('article');
@@ -422,7 +439,16 @@ function Reader() {
   });
   const markRead = useMutation({
     mutationFn: async (isRead: boolean) => api.post(`/articles/${id}/read-state`, { is_read: isRead }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['article', id] }); notify('Read state updated.'); },
+    onSuccess: (_result, isRead) => {
+      queryClient.invalidateQueries({ queryKey: ['article', id] });
+      queryClient.invalidateQueries({ queryKey: ['library'] });
+      if (isRead) {
+        notify('Article removed.');
+        navigate('/library');
+        return;
+      }
+      notify('Read state updated.');
+    },
     onError: () => notify('Could not update read state.', 'error'),
   });
   const saveProgress = useMutation({ mutationFn: async (payload: { position: number; total: number }) => api.post(`/articles/${id}/progress`, payload) });
