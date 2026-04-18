@@ -98,6 +98,10 @@ type Notification = {
   message: string;
 };
 
+function slugifyAnchor(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, '-');
+}
+
 const NotificationContext = React.createContext<{ notify: (message: string, kind?: Notification['kind']) => void }>({
   notify: () => undefined,
 });
@@ -133,7 +137,7 @@ function Home() {
 
   const activeSources = (sources.data ?? []).filter((s) => s.state === 'enabled').length;
   const unreadCount = (library.data ?? []).filter((a) => !a.is_read).length;
-  const continueReading = (library.data ?? []).find((a) => (a.reading_progress.total || 0) > 0 && (a.reading_progress.position || 0) > 0 && !a.is_read);
+  const continueReading = (library.data ?? []).find((a) => ((a.reading_progress?.total ?? 0) > 0) && ((a.reading_progress?.position ?? 0) > 0) && !a.is_read);
 
   return (
     <Page title='Dashboard'>
@@ -744,12 +748,12 @@ function Settings() {
       <article className='card settings-section-index'>
         <p className='muted'>Sections</p>
         <div className='row'>
-          {groups.map((group) => <a key={group.title} href={`#settings-${group.title.replaceAll(' ', '-').toLowerCase()}`}>{group.title}</a>)}
+          {groups.map((group) => <a key={group.title} href={`#settings-${slugifyAnchor(group.title)}`}>{group.title}</a>)}
         </div>
       </article>
       <div className='settings-grid settings-grid-wide'>
         {groups.map((group) => (
-          <article className='card settings-group' key={group.title} id={`settings-${group.title.replaceAll(' ', '-').toLowerCase()}`}>
+          <article className='card settings-group' key={group.title} id={`settings-${slugifyAnchor(group.title)}`}>
             <header>
               <h3>{group.title}</h3>
               <p className='muted'>{group.description}</p>
@@ -832,7 +836,7 @@ function Diagnostics() {
       <div className='settings-grid'>
         {Object.entries(diag.data ?? {}).map(([k, v]) => (
           <article className='card diag-card' key={k}>
-            <p className='label'>{k.replaceAll('_', ' ')}</p>
+            <p className='label'>{k.replace(/_/g, ' ')}</p>
             {renderValue(v)}
           </article>
         ))}
