@@ -41,14 +41,6 @@ def check_binary(command: str, fallback: str = "") -> dict:
     return {"ok": bool(resolved), "command": command, "path": resolved or "", "version": output}
 
 
-def check_transcript_dependency() -> dict:
-    try:
-        importlib.import_module("youtube_transcript_api")
-        return {"ok": True, "version": _pkg_version("youtube-transcript-api")}
-    except Exception as exc:
-        return {"ok": False, "error": str(exc)}
-
-
 def check_faster_whisper() -> dict:
     try:
         mod = importlib.import_module("faster_whisper")

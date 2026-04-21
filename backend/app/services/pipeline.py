@@ -19,7 +19,7 @@ from app.models.entities import (
 )
 from app.services.generation import ProviderConfig, generate_article, generate_text, render_prompt
 from app.services.ops import log_event
-from app.services.transcript import fetch_transcript, should_fallback_to_transcription, transcribe_audio_locally
+from app.services.transcript import transcribe_audio_locally
 from app.services.youtube import discover_videos, evaluate_video_policy, normalize_source_url, resolve_source_identity
 
 
@@ -252,37 +252,27 @@ def process_video_item(db, item_id: int):
         language_pref = _get_setting(db, "transcript_languages", "en")
         languages = [lang.strip() for lang in language_pref.split(",") if lang.strip()] or ["en"]
 
-        strategy = source.transcript_strategy if source else "transcript_first"
-        fallback_enabled = source.fallback_enabled if source else True
+        strategy = "force_local_transcription"
         text = ""
-        source_kind = "youtube_transcript"
-        fallback_used = False
+        source_kind = "local_transcription"
+        fallback_used = True
         transcribe_meta = {"transcription_seconds": 0, "audio_retained_path": ""}
 
-        if strategy != "force_local_transcription":
-            try:
-                text, source_kind = fetch_transcript(item.url, languages, strategy=strategy)
-            except Exception:
-                text = ""
-
-        if not text and should_fallback_to_transcription(strategy, False, fallback_enabled):
-            _set_item_status(db, item, ItemStatus.audio_downloaded)
-            _set_item_status(db, item, ItemStatus.transcription_started)
-            yt_dlp_command = _get_setting(db, "yt_dlp_path", "yt-dlp").strip() or "yt-dlp"
-            ffmpeg_command = _get_setting(db, "ffmpeg_path", "ffmpeg").strip() or "ffmpeg"
-            retain_failed = _get_setting(db, "retain_failed_audio", "false").lower() in {"1", "true", "yes", "on"}
-            delete_audio_after_success = _get_setting(db, "delete_audio_after_success", "true").lower() in {"1", "true", "yes", "on"}
-            text, transcribe_meta = transcribe_audio_locally(
-                item.url,
-                yt_dlp_command=yt_dlp_command,
-                ffmpeg_command=ffmpeg_command,
-                retain_audio_on_failure=retain_failed,
-                delete_audio_after_success=delete_audio_after_success,
-            )
-            source_kind = "local_transcription"
-            fallback_used = True
-            _set_item_status(db, item, ItemStatus.transcription_completed)
-        elif text:
+        _set_item_status(db, item, ItemStatus.audio_downloaded)
+        _set_item_status(db, item, ItemStatus.transcription_started)
+        yt_dlp_command = _get_setting(db, "yt_dlp_path", "yt-dlp").strip() or "yt-dlp"
+        ffmpeg_command = _get_setting(db, "ffmpeg_path", "ffmpeg").strip() or "ffmpeg"
+        retain_failed = _get_setting(db, "retain_failed_audio", "false").lower() in {"1", "true", "yes", "on"}
+        delete_audio_after_success = _get_setting(db, "delete_audio_after_success", "true").lower() in {"1", "true", "yes", "on"}
+        text, transcribe_meta = transcribe_audio_locally(
+            item.url,
+            yt_dlp_command=yt_dlp_command,
+            ffmpeg_command=ffmpeg_command,
+            retain_audio_on_failure=retain_failed,
+            delete_audio_after_success=delete_audio_after_success,
+        )
+        _set_item_status(db, item, ItemStatus.transcription_completed)
+        if text:
             _set_item_status(db, item, ItemStatus.transcript_found)
         else:
             _set_item_status(db, item, ItemStatus.transcript_unavailable)

@@ -9,5 +9,4 @@ celery==5.4.0
 redis==5.2.1
 alembic==1.14.1
 yt-dlp==2025.3.31
-youtube-transcript-api==1.1.0
 faster-whisper==1.1.1
