@@ -585,7 +585,7 @@ function Settings() {
   const settingsTemplate = useMemo(() => ({
     timezone: 'UTC',
     source_default_discovery_mode: 'latest_n', source_default_max_videos: '10', source_default_rolling_window_hours: '72', source_default_skip_shorts: 'true', source_default_min_duration_seconds: '180', source_default_dedup_policy: 'source_video_id',
-    transcript_languages: 'en', transcript_first: 'true', transcript_fallback_enabled: 'true', whisper_model_size: 'base', transcription_cpu_threads: '4', transcription_language_hint: '',
+    transcript_languages: 'en', whisper_model_size: 'base', transcription_cpu_threads: '4', transcription_language_hint: '',
     generation_provider: 'openai', generation_model: 'gpt-4.1-mini', generation_temperature: '0.2', generation_timeout_seconds: '300', generation_max_tokens: '30000', global_prompt_template: 'Convert the transcript into a polished article.\n\n{{transcript}}', openai_api_key: '', openai_base_url: 'https://api.openai.com/v1', lmstudio_base_url: 'http://localhost:1234/v1',
     title_output_language: 'English',
     reader_font_family: 'sans', reader_font_size: '17', reader_line_width: '72',
@@ -630,12 +630,10 @@ function Settings() {
       ],
     },
     {
-      title: 'Transcript',
-      description: 'Language strategy and transcription engine behavior.',
+      title: 'Transcription',
+      description: 'Everything is processed locally with Whisper.',
       fields: [
         { key: 'transcript_languages', label: 'Language priority', type: 'text', description: 'Comma-separated language codes, e.g. en,es.' },
-        { key: 'transcript_first', label: 'Try transcript before ASR', type: 'select', options: [{ label: 'Enabled', value: 'true' }, { label: 'Disabled', value: 'false' }] },
-        { key: 'transcript_fallback_enabled', label: 'Allow fallback', type: 'select', options: [{ label: 'Enabled', value: 'true' }, { label: 'Disabled', value: 'false' }] },
         { key: 'whisper_model_size', label: 'Whisper model', type: 'select', options: [{ label: 'Tiny', value: 'tiny' }, { label: 'Base', value: 'base' }, { label: 'Small', value: 'small' }, { label: 'Medium', value: 'medium' }, { label: 'Large', value: 'large' }] },
         { key: 'transcription_cpu_threads', label: 'CPU threads', type: 'range', min: 1, max: 32, step: 1 },
         { key: 'transcription_language_hint', label: 'Language hint', type: 'text' },

@@ -38,7 +38,6 @@ from app.services.diagnostics import (
     check_lmstudio_connectivity,
     check_openai_connectivity,
     check_storage_writable,
-    check_transcript_dependency,
 )
 from app.services.generation import ProviderConfig, generate_article, render_prompt
 from app.services.ops import redact_secrets
@@ -98,8 +97,6 @@ DEFAULT_APP_SETTINGS = {
     "source_default_skip_shorts": "true",
     "source_default_min_duration_seconds": "180",
     "source_default_dedup_policy": "source_video_id",
-    "transcript_first": "true",
-    "transcript_fallback_enabled": "true",
     "whisper_model_size": "base",
     "transcription_cpu_threads": "4",
     "transcription_language_hint": "",
@@ -141,8 +138,6 @@ def settings_schema():
         ],
         "transcript": [
             "transcript_languages",
-            "transcript_first",
-            "transcript_fallback_enabled",
             "whisper_model_size",
             "transcription_cpu_threads",
             "transcription_language_hint",
@@ -753,7 +748,6 @@ def diagnostics(db: Session = Depends(get_db)):
         'storage': check_storage_writable("./tmp"),
         'ffmpeg': ffmpeg_status,
         'yt_dlp': yt_dlp_status,
-        'transcript_dependency': check_transcript_dependency(),
         'faster_whisper': check_faster_whisper(),
         'openai_connectivity': check_openai_connectivity(openai_base_url, openai_api_key),
         'lmstudio_connectivity': check_lmstudio_connectivity(lmstudio_base_url),

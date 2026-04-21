@@ -42,7 +42,11 @@ def test_source_refresh_deduplicates_and_records_status_timeline(monkeypatch):
 
     monkeypatch.setattr(pipeline, 'discover_videos', fake_discover)
     monkeypatch.setattr(pipeline, 'resolve_source_identity', lambda _url: {'normalized_url': 'https://www.youtube.com/channel/xyz', 'canonical_url': 'https://www.youtube.com/channel/xyz', 'channel_id': 'xyz', 'title': 'XYZ'})
-    monkeypatch.setattr(pipeline, 'fetch_transcript', lambda *_args, **_kwargs: ('hello world', 'youtube_transcript'))
+    monkeypatch.setattr(
+        pipeline,
+        'transcribe_audio_locally',
+        lambda *_args, **_kwargs: ('hello world', {'transcription_seconds': 1, 'audio_retained_path': ''}),
+    )
     monkeypatch.setattr(pipeline, 'generate_article', lambda *_args, **_kwargs: 'Generated body')
 
     with TestClient(app) as client:
@@ -55,9 +59,10 @@ def test_source_refresh_deduplicates_and_records_status_timeline(monkeypatch):
 
         lib = client.get('/api/library')
         assert lib.status_code == 200
-        assert len(lib.json()) == 1
+        source_rows = [row for row in lib.json() if row['source_id'] == sid]
+        assert len(source_rows) == 1
 
-        item_id = lib.json()[0]['video_item_id']
+        item_id = source_rows[0]['video_item_id']
         timeline = client.get(f'/api/items/{item_id}/timeline')
         assert timeline.status_code == 200
         assert len(timeline.json()) >= 3

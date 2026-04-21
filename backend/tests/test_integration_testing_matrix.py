@@ -52,7 +52,11 @@ def test_integration_real_life_lore_refresh_discovery_and_generation(monkeypatch
             },
         ],
     )
-    monkeypatch.setattr(pipeline, "fetch_transcript", lambda *_args, **_kwargs: ("Transcript text", "youtube_transcript"))
+    monkeypatch.setattr(
+        pipeline,
+        "transcribe_audio_locally",
+        lambda *_args, **_kwargs: ("Transcript text", {"transcription_seconds": 1, "audio_retained_path": ""}),
+    )
     monkeypatch.setattr(pipeline, "generate_article", lambda *_args, **_kwargs: "Generated article body")
 
     with TestClient(app) as client:
@@ -68,7 +72,7 @@ def test_integration_real_life_lore_refresh_discovery_and_generation(monkeypatch
         item_id = library.json()[0]["video_item_id"]
         transcript = client.get(f"/api/transcripts/{item_id}")
         assert transcript.status_code == 200
-        assert transcript.json()["source"] == "youtube_transcript"
+        assert transcript.json()["source"] == "local_transcription"
 
         timeline = client.get(f"/api/items/{item_id}/timeline")
         assert timeline.status_code == 200
@@ -107,9 +111,6 @@ def test_integration_transcript_fallback_retry_and_regeneration(monkeypatch):
 
     calls = {"transcribe": 0, "generate": 0}
 
-    def fake_fetch(*_args, **_kwargs):
-        raise RuntimeError("transcript unavailable")
-
     def fake_transcribe(*_args, **kwargs):
         calls["transcribe"] += 1
         assert kwargs.get("delete_audio_after_success") is True
@@ -121,7 +122,6 @@ def test_integration_transcript_fallback_retry_and_regeneration(monkeypatch):
         calls["generate"] += 1
         return f"Generated v{calls['generate']}"
 
-    monkeypatch.setattr(pipeline, "fetch_transcript", fake_fetch)
     monkeypatch.setattr(pipeline, "transcribe_audio_locally", fake_transcribe)
     monkeypatch.setattr(pipeline, "generate_article", fake_generate)
 
@@ -195,7 +195,11 @@ def test_failure_paths_invalid_source_and_generation_provider_errors(monkeypatch
                 }
             ],
         )
-        monkeypatch.setattr(pipeline, "fetch_transcript", lambda *_args, **_kwargs: ("text", "youtube_transcript"))
+        monkeypatch.setattr(
+            pipeline,
+            "transcribe_audio_locally",
+            lambda *_args, **_kwargs: ("text", {"transcription_seconds": 1, "audio_retained_path": ""}),
+        )
         monkeypatch.setattr(pipeline, "generate_article", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("openai auth failure")))
 
         source_id = _create_source(client, "/provider-openai")

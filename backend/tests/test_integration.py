@@ -3,7 +3,29 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
-def test_settings_source_refresh_completes_without_placeholder_failures():
+def test_settings_source_refresh_completes_without_placeholder_failures(monkeypatch):
+    from app.services import pipeline
+
+    monkeypatch.setattr(
+        pipeline,
+        "discover_videos",
+        lambda _source: [
+            {
+                "video_id": "abc123",
+                "url": "https://www.youtube.com/watch?v=abc123",
+                "title": "ABC",
+                "duration": 600,
+                "is_live": False,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "transcribe_audio_locally",
+        lambda *_args, **_kwargs: ("local transcript", {"transcription_seconds": 1, "audio_retained_path": ""}),
+    )
+    monkeypatch.setattr(pipeline, "generate_article", lambda *_args, **_kwargs: "Generated body")
+
     with TestClient(app) as client:
         r = client.put('/api/settings', json={'provider': 'openai'})
         assert r.status_code == 200

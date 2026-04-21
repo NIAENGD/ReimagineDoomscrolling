@@ -7,7 +7,6 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 from faster_whisper import WhisperModel
-from youtube_transcript_api import YouTubeTranscriptApi
 
 
 def select_transcript_strategy(source) -> str:
@@ -34,27 +33,6 @@ def _extract_video_id(video_url: str) -> str:
     if len(parts) >= 2 and parts[0] in {"embed", "shorts"}:
         return parts[1]
     raise ValueError("Unable to parse YouTube video id from URL")
-
-
-def fetch_transcript(video_url: str, languages: list[str], strategy: str = "transcript_first") -> tuple[str, str]:
-    video_id = _extract_video_id(video_url)
-    language_order = languages or ["en"]
-
-    normalized = (strategy or "").lower()
-    fetched = YouTubeTranscriptApi().list(video_id)
-    transcript_obj = None
-    if normalized in {"manual_only", "prefer_manual_then_auto"}:
-        transcript_obj = fetched.find_manually_created_transcript(language_order)
-    elif normalized == "auto_only":
-        transcript_obj = fetched.find_generated_transcript(language_order)
-    else:
-        transcript_obj = fetched.find_transcript(language_order)
-
-    snippets = transcript_obj.fetch()
-    text = "\n".join(part.text.strip() for part in snippets if part.text.strip())
-    if not text:
-        return "", "youtube_transcript"
-    return text, "youtube_transcript"
 
 
 def transcribe_audio_locally(
