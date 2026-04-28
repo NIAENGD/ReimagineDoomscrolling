@@ -112,6 +112,12 @@ main { padding: 2rem; }
 .page { display: grid; gap: 1rem; }
 .page-header h1 { margin: 0; font-size: clamp(1.6rem, 2.5vw, 2rem); }
 .page-header p { margin: .35rem 0 0; }
+.mobile-nav-toggle {
+  display: none;
+}
+.mobile-backdrop {
+  display: none;
+}
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
 .stack { display: grid; gap: .85rem; padding-left: 1rem; }
@@ -376,19 +382,87 @@ textarea {
 @media (max-width: 1024px) {
   .layout { grid-template-columns: 1fr; }
   .layout.nav-collapsed { grid-template-columns: 1fr; }
+  .mobile-nav-toggle {
+    display: inline-flex;
+    position: fixed;
+    top: .8rem;
+    right: .8rem;
+    z-index: 1200;
+    width: 2.5rem;
+    height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #111;
+  }
   aside {
-    position: static;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid rgba(136, 164, 237, 0.2);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: min(82vw, 320px);
+    max-width: 100%;
+    height: 100vh;
+    z-index: 1150;
+    transform: translateX(-100%);
+    transition: transform .2s ease;
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+    overflow: auto;
+  }
+  .layout.mobile-menu-open aside {
+    transform: translateX(0);
+  }
+  .mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(0, 0, 0, .55);
+    border: 0;
+    padding: 0;
+  }
+  .layout.mobile-menu-open main {
+    pointer-events: none;
+    user-select: none;
+  }
+  .layout.nav-collapsed .sidebar-top {
+    grid-template-columns: minmax(0, 1fr) auto;
+    justify-items: stretch;
+  }
+  .layout.nav-collapsed aside nav a {
+    justify-content: flex-start;
+    padding: .74rem .86rem;
+  }
+  .layout.nav-collapsed .sidebar-footer {
+    display: block;
+  }
+  .layout.nav-collapsed .sidebar-brand {
+    display: block;
+  }
+  .layout.nav-collapsed aside nav a span:last-child {
+    display: inline;
+  }
+  aside {
+    padding-top: 1.2rem;
   }
   .library-shell { grid-template-columns: 1fr; }
   .library-toolbar { grid-template-columns: 1fr; }
   .channel-filter { position: static; }
-  main { padding: 1rem; }
+  main { padding: 4rem .9rem 1rem; }
   .notification-stack {
     left: 1rem;
     right: 1rem;
     width: auto;
+  }
+  .hero {
+    flex-direction: column;
+  }
+  .row > * {
+    width: 100%;
+  }
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
   }
 }

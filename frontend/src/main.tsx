@@ -6,6 +6,7 @@ import {
   NavLink,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
@@ -849,7 +850,9 @@ function Logs() {
 }
 
 function Layout() {
+  const location = useLocation();
   const [navCollapsed, setNavCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const notify = (message: string, kind: Notification['kind'] = 'success') => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
@@ -859,6 +862,12 @@ function Layout() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'dark');
   }, []);
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+  useEffect(() => {
+    if (mobileMenuOpen) setNavCollapsed(false);
+  }, [mobileMenuOpen]);
 
   const links = [
     ['/', 'Home', '🏠'],
@@ -872,7 +881,16 @@ function Layout() {
   ] as const;
   return (
     <NotificationContext.Provider value={{ notify }}>
-      <div className={`layout ${navCollapsed ? 'nav-collapsed' : ''}`}>
+      <div className={`layout ${navCollapsed ? 'nav-collapsed' : ''} ${mobileMenuOpen ? 'mobile-menu-open' : ''}`}>
+        <button
+          type='button'
+          className='mobile-nav-toggle'
+          aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+          aria-expanded={mobileMenuOpen}
+          onClick={() => setMobileMenuOpen((v) => !v)}
+        >
+          {mobileMenuOpen ? '✕' : '☰'}
+        </button>
         <aside>
         <div className='sidebar-shell'>
           <div className='sidebar-top'>
@@ -895,6 +913,7 @@ function Layout() {
           {!navCollapsed ? <div className='sidebar-footer muted'>Monochrome UI locked</div> : null}
         </div>
         </aside>
+        {mobileMenuOpen ? <button type='button' className='mobile-backdrop' aria-label='Close menu' onClick={() => setMobileMenuOpen(false)} /> : null}
         <main>
           <Routes>
             <Route path='/' element={<Home />} />
