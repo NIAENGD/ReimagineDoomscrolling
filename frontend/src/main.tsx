@@ -99,6 +99,10 @@ type Notification = {
   message: string;
 };
 
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
 function slugifyAnchor(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, '-');
 }
@@ -131,14 +135,17 @@ function Page({ title, children }: { title: string; children: React.ReactNode })
 }
 
 function Home() {
-  const sources = useQuery({ queryKey: ['sources'], queryFn: async () => (await api.get('/sources')).data as Source[] });
-  const jobs = useQuery({ queryKey: ['jobs'], queryFn: async () => (await api.get('/jobs')).data as Job[] });
-  const library = useQuery({ queryKey: ['library-home'], queryFn: async () => (await api.get('/library')).data as LibraryItem[] });
+  const sources = useQuery({ queryKey: ['sources'], queryFn: async () => asArray<Source>((await api.get('/sources')).data) });
+  const jobs = useQuery({ queryKey: ['jobs'], queryFn: async () => asArray<Job>((await api.get('/jobs')).data) });
+  const library = useQuery({ queryKey: ['library-home'], queryFn: async () => asArray<LibraryItem>((await api.get('/library')).data) });
   const scheduler = useQuery({ queryKey: ['scheduler'], queryFn: async () => (await api.get('/scheduler/status')).data });
 
-  const activeSources = (sources.data ?? []).filter((s) => s.state === 'enabled').length;
-  const unreadCount = (library.data ?? []).filter((a) => !a.is_read).length;
-  const continueReading = (library.data ?? []).find((a) => ((a.reading_progress?.total ?? 0) > 0) && ((a.reading_progress?.position ?? 0) > 0) && !a.is_read);
+  const sourceItems = asArray<Source>(sources.data);
+  const libraryItems = asArray<LibraryItem>(library.data);
+  const jobItems = asArray<Job>(jobs.data);
+  const activeSources = sourceItems.filter((s) => s.state === 'enabled').length;
+  const unreadCount = libraryItems.filter((a) => !a.is_read).length;
+  const continueReading = libraryItems.find((a) => ((a.reading_progress?.total ?? 0) > 0) && ((a.reading_progress?.position ?? 0) > 0) && !a.is_read);
 
   return (
     <Page title='Dashboard'>
@@ -151,7 +158,7 @@ function Home() {
         <button onClick={() => { sources.refetch(); jobs.refetch(); library.refetch(); scheduler.refetch(); }}>Refresh dashboard</button>
       </article>
       <div className='grid'>
-        <article className='card stat'><p className='label'>Sources</p><p className='value'>{sources.data?.length ?? 0}</p></article>
+        <article className='card stat'><p className='label'>Sources</p><p className='value'>{sourceItems.length}</p></article>
         <article className='card stat'><p className='label'>Active sources</p><p className='value'>{activeSources}</p></article>
         <article className='card stat'><p className='label'>Unread</p><p className='value'>{unreadCount}</p></article>
         <article className='card stat'><p className='label'>Scheduler</p><p className='value'>{String(scheduler.data?.enabled ?? false)}</p></article>
@@ -165,7 +172,7 @@ function Home() {
       <article className='card'>
         <h2>Latest articles</h2>
         <ul className='stack'>
-          {(library.data ?? []).slice(0, 6).map((item) => (
+          {libraryItems.slice(0, 6).map((item) => (
             <li key={item.article_id}>
               <Link to={`/reader/${item.article_id}`}>{item.title}</Link>
               <div className='muted'>Channel: {item.source_title || 'Unknown source'}</div>
@@ -176,7 +183,7 @@ function Home() {
       <article className='card'>
         <h2>Recent jobs</h2>
         <ul className='stack'>
-          {(jobs.data ?? []).slice(0, 6).map((j) => <li key={j.id}>#{j.id} {j.type} · <span className='muted'>{j.status}</span></li>)}
+          {jobItems.slice(0, 6).map((j) => <li key={j.id}>#{j.id} {j.type} · <span className='muted'>{j.status}</span></li>)}
         </ul>
       </article>
     </Page>
@@ -958,12 +965,45 @@ function Jobs() {
   );
 }
 
+type AppErrorBoundaryState = { hasError: boolean };
+
+class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, AppErrorBoundaryState> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error('UI render failed', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '1rem' }}>
+          <article className='card' style={{ maxWidth: 560 }}>
+            <h2>Something went wrong while rendering this screen.</h2>
+            <p className='muted'>Please refresh the page. If this keeps happening, reconnect the backend address in Settings.</p>
+          </article>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <QueryClientProvider client={qc}>
-      <BrowserRouter>
-        <Layout />
-      </BrowserRouter>
-    </QueryClientProvider>
+    <AppErrorBoundary>
+      <QueryClientProvider client={qc}>
+        <BrowserRouter>
+          <Layout />
+        </BrowserRouter>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   </React.StrictMode>,
 );
