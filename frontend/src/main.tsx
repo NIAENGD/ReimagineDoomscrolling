@@ -115,6 +115,21 @@ function useNotifications() {
   return React.useContext(NotificationContext);
 }
 
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => (typeof window !== 'undefined' ? window.matchMedia(query).matches : false));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const mediaQuery = window.matchMedia(query);
+    const update = () => setMatches(mediaQuery.matches);
+    update();
+    mediaQuery.addEventListener('change', update);
+    return () => mediaQuery.removeEventListener('change', update);
+  }, [query]);
+
+  return matches;
+}
+
 function getApiErrorMessage(error: unknown, fallback: string) {
   const detail = (error as AxiosError<{ detail?: unknown }>)?.response?.data?.detail;
   if (typeof detail !== 'string') return fallback;
@@ -310,6 +325,7 @@ function Library() {
   const [params, setParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { notify } = useNotifications();
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const q = params.get('q') ?? '';
   const source = params.get('source') ?? '';
   const selectedChannel = params.get('channel') ?? 'all';
@@ -317,6 +333,7 @@ function Library() {
   const sort_by = params.get('sort_by') ?? 'import_time';
   const view = params.get('view') ?? 'grid';
   const collection_id = params.get('collection_id') ?? '';
+  const isMobileLibrary = useMediaQuery('(max-width: 1024px)');
 
   const collections = useQuery({ queryKey: ['collections'], queryFn: async () => (await api.get('/collections')).data as Collection[] });
   const library = useQuery({
@@ -329,6 +346,8 @@ function Library() {
     [entries],
   );
   const visibleEntries = selectedChannel === 'all' ? entries : entries.filter((item) => item.source_title === selectedChannel);
+  const unreadCount = entries.filter((item) => !item.is_read).length;
+  const readCount = Math.max(0, entries.length - unreadCount);
 
   const markRead = useMutation({
     mutationFn: async ({ articleId, isRead }: { articleId: number; isRead: boolean }) => api.post(`/articles/${articleId}/read-state`, { is_read: isRead }),
@@ -357,7 +376,17 @@ function Library() {
     onError: () => notify('Could not add to collection.', 'error'),
   });
 
-  const set = (k: string, v: string) => { const next = Object.fromEntries(params.entries()); if (v) next[k] = v; else delete next[k]; setParams(next); };
+  const set = (k: string, v: string) => {
+    const next = Object.fromEntries(params.entries());
+    if (v) next[k] = v;
+    else delete next[k];
+    setParams(next);
+  };
+
+  const resetFilters = () => {
+    setParams({});
+    setMobileFiltersOpen(false);
+  };
 
   const thumbnailFor = (item: LibraryItem) => {
     if (item.thumbnail_url) return item.thumbnail_url;
@@ -381,7 +410,7 @@ function Library() {
             <span className='badge'>Category: {item.video_category || 'Unrated'}</span>
             <span className='badge'>Score: {item.quality_score ?? 0}</span>
           </p>
-          <div className='row'>
+          <div className='row library-card-actions'>
             <Link to={`/reader/${item.article_id}`}>Open reader</Link>
             <button onClick={() => markRead.mutate({ articleId: item.article_id, isRead: !item.is_read })}>{item.is_read ? 'Mark unread' : 'Mark read'}</button>
             <select defaultValue='' onChange={(e) => e.target.value && addToCollection.mutate({ articleId: item.article_id, collectionId: Number(e.target.value) })}>
@@ -397,31 +426,68 @@ function Library() {
   return (
     <Page title='Library'>
       <section className='library-shell'>
-        <aside className='card channel-filter'>
-          <h3>Channels</h3>
-          <p className='muted channel-filter-label'>Filter by source</p>
-          {channels.map((channel) => (
-            <button
-              key={channel}
-              type='button'
-              className={`chip ${selectedChannel === channel ? 'active' : ''}`}
-              onClick={() => {
-                set('channel', channel);
-                set('source', channel === 'all' ? '' : channel);
-              }}
-            >
-              <span>{channel === 'all' ? 'All channels' : channel}</span>
-              <span className='muted'>{channel === 'all' ? entries.length : entries.filter((item) => item.source_title === channel).length}</span>
-            </button>
-          ))}
-        </aside>
+        {!isMobileLibrary ? (
+          <aside className='card channel-filter'>
+            <h3>Channels</h3>
+            <p className='muted channel-filter-label'>Filter by source</p>
+            {channels.map((channel) => (
+              <button
+                key={channel}
+                type='button'
+                className={`chip ${selectedChannel === channel ? 'active' : ''}`}
+                onClick={() => {
+                  set('channel', channel);
+                  set('source', channel === 'all' ? '' : channel);
+                }}
+              >
+                <span>{channel === 'all' ? 'All channels' : channel}</span>
+                <span className='muted'>{channel === 'all' ? entries.length : entries.filter((item) => item.source_title === channel).length}</span>
+              </button>
+            ))}
+          </aside>
+        ) : null}
         <div className='library-content'>
-          <article className='card library-toolbar'>
+          <article className='card library-mobile-summary'>
+            <div>
+              <p className='muted'>Showing {visibleEntries.length} of {entries.length}</p>
+              <h3>Unread {unreadCount} · Read {readCount}</h3>
+            </div>
+            <div className='library-view-toggle'>
+              <button type='button' className={view === 'grid' ? 'active' : ''} onClick={() => set('view', 'grid')}>Grid</button>
+              <button type='button' className={view === 'list' ? 'active' : ''} onClick={() => set('view', 'list')}>List</button>
+            </div>
+          </article>
+          <article className='card library-toolbar library-toolbar-search'>
             <input placeholder='Search videos, channels, or article text' defaultValue={q} onChange={(e) => set('q', e.target.value)} />
+            {isMobileLibrary ? (
+              <button type='button' onClick={() => setMobileFiltersOpen((current) => !current)}>
+                {mobileFiltersOpen ? 'Hide filters' : 'Show filters'}
+              </button>
+            ) : null}
+          </article>
+          <article className='card channel-filter-mobile'>
+            <p className='muted channel-filter-label'>Channel</p>
+            <div className='channel-chip-scroll'>
+              {channels.map((channel) => (
+                <button
+                  key={channel}
+                  type='button'
+                  className={`chip ${selectedChannel === channel ? 'active' : ''}`}
+                  onClick={() => {
+                    set('channel', channel);
+                    set('source', channel === 'all' ? '' : channel);
+                  }}
+                >
+                  <span>{channel === 'all' ? 'All' : channel}</span>
+                </button>
+              ))}
+            </div>
+          </article>
+          <article className={`card library-toolbar ${isMobileLibrary && !mobileFiltersOpen ? 'mobile-filter-hidden' : ''}`}>
             <select value={read_state} onChange={(e) => set('read_state', e.target.value)}><option value=''>All status</option><option value='unread'>Unread</option><option value='read'>Read</option></select>
             <select value={sort_by} onChange={(e) => set('sort_by', e.target.value)}><option value='import_time'>Newest imported</option><option value='publish_time'>Newest published</option><option value='source'>Channel A-Z</option><option value='title'>Title A-Z</option></select>
             <select value={collection_id} onChange={(e) => set('collection_id', e.target.value)}><option value=''>All collections</option>{(collections.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-            <select value={view} onChange={(e) => set('view', e.target.value)}><option value='grid'>Grid</option><option value='list'>List</option></select>
+            <button type='button' onClick={resetFilters}>Reset</button>
           </article>
           {cards(visibleEntries)}
         </div>

@@ -168,6 +168,54 @@ main { padding: 2rem; }
 .library-shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 1rem; align-items: flex-start; }
 .library-content { display: grid; gap: 1rem; }
 .library-toolbar { display: grid; gap: .7rem; grid-template-columns: minmax(220px, 1fr) repeat(4, minmax(130px, max-content)); }
+.library-toolbar-search {
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: center;
+}
+.library-mobile-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+}
+.library-mobile-summary h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.library-mobile-summary .muted {
+  margin: 0 0 .25rem;
+}
+.library-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.library-view-toggle button {
+  border-radius: 0;
+  border: 0;
+  padding: .45rem .7rem;
+  min-width: 3.7rem;
+}
+.library-view-toggle button.active {
+  background: #fff;
+  color: #000;
+}
+.channel-filter-mobile {
+  display: none;
+}
+.channel-chip-scroll {
+  display: flex;
+  gap: .5rem;
+  overflow-x: auto;
+  padding-bottom: .25rem;
+}
+.channel-chip-scroll .chip {
+  white-space: nowrap;
+}
+.mobile-filter-hidden {
+  display: none;
+}
 .channel-filter {
   position: sticky;
   top: 1rem;
@@ -209,6 +257,9 @@ main { padding: 2rem; }
 }
 .library-cards article.card { padding: .95rem; }
 .library-cards.list article.card { max-width: 920px; }
+.library-card-actions > * {
+  flex: 1;
+}
 
 input, select, textarea, button {
   background: var(--surface-strong);
@@ -447,8 +498,19 @@ textarea {
   }
   .library-shell { grid-template-columns: 1fr; }
   .library-toolbar { grid-template-columns: 1fr; }
+  .library-toolbar-search { grid-template-columns: 1fr auto; }
+  .channel-filter-mobile { display: grid; gap: .45rem; }
+  .library-mobile-summary {
+    position: sticky;
+    top: 4rem;
+    z-index: 20;
+    background: #000;
+  }
+  .library-mobile-summary .library-view-toggle {
+    flex-shrink: 0;
+  }
   .channel-filter { position: static; }
-  main { padding: 4rem .9rem 1rem; }
+  main { padding: 4rem .75rem 1rem; }
   .notification-stack {
     left: 1rem;
     right: 1rem;
@@ -458,6 +520,9 @@ textarea {
     flex-direction: column;
   }
   .row > * {
+    width: 100%;
+  }
+  .library-card-actions > * {
     width: 100%;
   }
   table {
